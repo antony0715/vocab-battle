@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>6人詞彙大逃殺 - Vocabulary Battle Royale</title>
+    <link rel="stylesheet" href="style.css">
+    
+    <!-- Firebase SDK (Realtime Database) 放這裡才對 -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+</head>
+<body>
+
+    <div class="game-container">
+
+        <!-- ==================== 1. 遊戲大廳畫面 ==================== -->
+        <div id="lobby-screen" class="screen">
+            <h1>你背的不夠多</h1>
+            <p class="subtitle">Vocabulary Battle Royale </p>
+            
+            <!-- ⚡ 在這裡加入最高紀錄顯示 -->
+            <div style="background: #f1f5f9; padding: 12px; border-radius: 12px; text-align: center; font-weight: bold; color: #3b82f6;">
+            🏆 最高生存紀錄：<span id="best-time-display">0</span> 秒
+            </div>
+            
+            <div class="input-group">
+                <label for="player-name">你的玩家暱稱：</label>
+                <input type="text" id="player-name" placeholder="請輸入暱稱..." value="單字小高手">
+            </div>
+
+            <div class="input-group" id="room-code-box">
+                <label for="room-code-input">房間代碼 (加入房間時填寫)：</label>
+                <input type="text" id="room-code-input" placeholder="例如: 4982" maxlength="4">
+            </div>
+
+            <div class="btn-grid">
+                <button id="btn-create-room" class="btn btn-primary">建立房間 (房主)</button>
+                <button id="btn-join-room" class="btn btn-secondary">加入房間</button>
+            </div>
+        </div>
+
+        <!-- ==================== 2. 房間等待區 (最多 6 人) ==================== -->
+        <div id="room-screen" class="screen hidden">
+            <h1>戰前等待大廳</h1>
+            <div class="room-header">
+                <span>房間代碼：</span>
+                <span id="display-room-code" class="room-code">#----</span>
+            </div>
+
+            <label>目前房間內成員 (最高 6 人)：</label>
+            <div id="player-list" class="player-list">
+                <!-- 動態生成的成員會在這裡 -->
+            </div>
+
+            <div class="btn-grid">
+                <button id="btn-start-game" class="btn btn-primary">開始大逃殺！</button>
+                <button id="btn-leave-room" class="btn btn-danger">離開房間</button>
+            </div>
+        </div>
+
+        <!-- ==================== 3. 戰鬥競技場畫面 ==================== -->
+        <div id="battle-screen" class="screen hidden">
+            
+            <!-- 上方：6人血量與即時進度儀表板 -->
+            <div class="battle-scoreboard" id="scoreboard">
+                <!-- 動態生成的真實玩家血條會自動長在這裡 -->
+            </div>
+
+            <!-- 中央：答題核心區 -->
+            <div class="question-box" id="question-box-container">
+                <p style="color: #888; margin-bottom: 5px;">請選擇正確的中文意思：</p>
+                <div class="word-display" id="current-word">載入中...</div>
+                
+                <div id="options-container" class="options-grid">
+                    <!-- JS 會自動在這裡產生 4 個選項按鈕 -->
+                </div>
+
+                <div class="combo-streak" id="combo-display">
+                    🔥 連擊：0 Combo！
+                </div>
+                <!-- ⚡ 在這裡加入生存時間顯示 -->
+                <div style="text-align: center; font-weight: bold; color: #64748b; margin-top: 5px;">
+                ⏱️ 生存時間：<span id="survival-timer">0</span> 秒
+                </div>
+                <!-- ⚡ 錯題回顧彈窗 / 區域 -->
+                <div id="wrong-words-container" class="hidden" style="margin-top: 20px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 16px; padding: 16px; text-align: left;">
+                    <h3 style="color: #ef4444; font-size: 16px; margin-bottom: 12px; text-align: center;">📖 本局錯題檢討</h3>
+                    <div id="wrong-words-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto;">
+                    <!-- 動態產生錯題 -->
+                    </div>
+                    <button id="btn-close-review" class="btn btn-secondary" style="width: 100%; margin-top: 12px; padding: 8px;">確定並返回大廳</button>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- 載入所有級數的單字庫 -->
+    <script src="vocab_level4.js"></script>
+    <script src="vocab_level5.js"></script>
+    <script src="vocab_level6.js"></script>
+    
+    <!-- 最後載入主邏輯 -->
+    <script src="app.js"></script>
+</body>
+</html>

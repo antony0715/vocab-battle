@@ -1,0 +1,267 @@
+/* ==================== 懂你意思單字哥 - 清新亮色系風格 ==================== */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+body {
+    background-color: #f8fafc; /* 極清爽的淺灰白背景 */
+    color: #1e293b;            /* 深色清晰字體 */
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.game-container {
+    width: 100%;
+    max-width: 480px;
+    background: #ffffff;
+    border-radius: 24px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+    padding: 32px 24px;
+    margin: 16px;
+    border: 1px solid #e2e8f0;
+}
+
+.screen {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.screen.hidden {
+    display: none !important;
+}
+
+h1 {
+    font-size: 24px;
+    font-weight: 700;
+    color: #0f172a;
+    text-align: center;
+}
+
+.subtitle {
+    font-size: 14px;
+    color: #64748b;
+    text-align: center;
+    margin-top: -10px;
+}
+
+/* 輸入框與標籤 */
+.input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.input-group label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #475569;
+}
+
+.input-group input {
+    padding: 12px 16px;
+    border-radius: 12px;
+    border: 1px solid #cbd5e1;
+    background-color: #f1f5f9;
+    font-size: 16px;
+    color: #1e293b;
+    outline: none;
+    transition: all 0.2s;
+}
+
+.input-group input:focus {
+    border-color: #3b82f6;
+    background-color: #ffffff;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+/* 按鈕樣式 */
+.btn-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 10px;
+}
+
+.btn {
+    padding: 14px;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.1s, background-color 0.2s;
+}
+
+.btn:active {
+    transform: scale(0.98);
+}
+
+.btn-primary {
+    background-color: #3b82f6; /* 清新明亮藍 */
+    color: #ffffff;
+}
+
+.btn-primary:hover {
+    background-color: #2563eb;
+}
+
+.btn-secondary {
+    background-color: #e2e8f0;
+    color: #334155;
+}
+
+.btn-secondary:hover {
+    background-color: #cbd5e1;
+}
+
+.btn-danger {
+    background-color: #fee2e2;
+    color: #dc2626;
+}
+
+.btn-danger:hover {
+    background-color: #fecaca;
+}
+
+/* 房間等待區 */
+.room-header {
+    text-align: center;
+    background: #f8fafc;
+    padding: 12px;
+    border-radius: 12px;
+    border: 1px dashed #cbd5e1;
+}
+
+.room-code {
+    font-size: 20px;
+    font-weight: 700;
+    color: #3b82f6;
+}
+
+.player-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.player-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #f1f5f9;
+    padding: 10px 14px;
+    border-radius: 10px;
+}
+
+.player-avatar {
+    width: 32px;
+    height: 32px;
+    background: #3b82f6;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+/* 戰鬥畫面與計分板 */
+.battle-player-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f8fafc;
+    padding: 12px 16px;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+}
+
+.player-name-tag {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.hp-bar-outer {
+    flex: 1;
+    height: 10px;
+    background: #e2e8f0;
+    border-radius: 5px;
+    margin: 0 12px;
+    overflow: hidden;
+}
+
+.hp-bar-inner {
+    height: 100%;
+    background: #22c55e; /* 健康綠色 */
+    border-radius: 5px;
+    transition: width 0.3s ease;
+}
+
+.hp-bar-inner.low {
+    background: #ef4444; /* 血量低時變紅 */
+}
+
+.status-badge {
+    font-size: 13px;
+    font-weight: 700;
+    color: #64748b;
+}
+
+/* 題目與選項區 */
+.question-box {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    text-align: center;
+}
+
+.word-display {
+    font-size: 32px;
+    font-weight: 800;
+    color: #0f172a;
+    background: #f1f5f9;
+    padding: 24px;
+    border-radius: 16px;
+    letter-spacing: 1px;
+}
+
+.options-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.option-btn {
+    padding: 14px 16px;
+    background: #ffffff;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 600;
+    color: #334155;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.option-btn:hover {
+    background: #f8fafc;
+    border-color: #3b82f6;
+    color: #3b82f6;
+}
+
+.combo-streak {
+    font-size: 15px;
+    font-weight: 700;
+    color: #f59e0b; /* 活潑橘黃 */
+    text-align: center;
+    margin-top: 5px;
+}
