@@ -742,7 +742,7 @@ function launchSingleGame() {
     }
 }
 
-// ==================== 排行榜動態渲染函數 ====================
+// ==================== 排行榜動態渲染函數與監聽 ====================
 function renderLeaderboard(dataList = []) {
     const leaderboardListEl = document.getElementById('leaderboard-list');
     if (!leaderboardListEl) return;
@@ -752,7 +752,6 @@ function renderLeaderboard(dataList = []) {
         return;
     }
 
-    // 動態拼裝真實排行榜項目
     let html = '';
     dataList.forEach((item, index) => {
         let rankBadge = `${index + 1}.`;
@@ -760,8 +759,11 @@ function renderLeaderboard(dataList = []) {
         else if (index === 1) rankBadge = '🥈 2.';
         else if (index === 2) rankBadge = '🥉 3.';
 
+        // 修正原本這裡的語法錯誤
+        const showBorder = index < dataList.length - 1;
+
         html += `
-            <div style="display: flex; justify-content: space-between; padding: 4px 0; ${index < dataList.length - 1 ? 'border-bottom: 1px dashed #f1f5f9;' : ''}">
+            <div style="display: flex; justify-content: space-between; padding: 4px 0; ${showBorder ? 'border-bottom: 1px dashed #f1f5f9;' : ''}">
                 <span>${rankBadge} ${item.name || '匿名玩家'}</span>
                 <span style="font-weight: bold; color: #16a34a;">${item.score || 0} 秒</span>
             </div>
@@ -771,17 +773,31 @@ function renderLeaderboard(dataList = []) {
     leaderboardListEl.innerHTML = html;
 }
 
-// 初始執行一次，顯示無資料狀態
-renderLeaderboard([]);
-//更新分數
+// 🌐 自動從 Firebase 即時監聽並更新排行榜
+if (typeof dbRef !== 'undefined') {
+    dbRef.on('value', (snapshot) => {
+        const data = snapshot.val();
+        const dataList = [];
+
+        if (data) {
+            Object.keys(data).forEach(key => {
+                dataList.push(data[key]);
+            });
+            // 依分數高低排序（最高分排最前面）
+            dataList.sort((a, b) => b.score - a.score);
+        }
+
+        renderLeaderboard(dataList);
+    });
+}
+
+// 更新分數函式維持不變
 function uploadRankedScore(name, score) {
     if (currentMode !== 'ranked') return;
     if (!name || score <= 0) return;
 
-    // 清除名稱中的非法字元（Firebase key 不支援 . $ # [ ] /）
     const safeKey = name.replace(/[.$#\[\]\/]/g, "_");
 
-    // 直接以名稱做為節點 key，覆蓋原先的紀錄
     dbRef.child(safeKey).set({
         name: name,
         score: score,
