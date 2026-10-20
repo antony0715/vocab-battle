@@ -265,3 +265,26 @@ h1 {
     text-align: center;
     margin-top: 5px;
 }
+
+/* ==================== 題目文字區塊閃爍特效 (純色圓角邊框) ==================== */
+#current-word {
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+    border: 5px solid transparent; /* 預設透明，避免版面跳動 */
+    border-radius: 12px;          /* 圓角弧度 */
+    padding: 8px 12px;            /* 讓邊框與文字保持一點舒適的間距 */
+}
+
+/* 答對：題目區閃綠框 */
+#current-word.flash-correct {
+    border-color: #22c55e !important;
+}
+
+/* 答錯：題目區閃紅框 */
+#current-word.flash-wrong {
+    border-color: #ef4444 !important;
+}
+
+/* ==================== 通用隱藏類別 ==================== */
+.hidden {
+    display: none !important;
+}
