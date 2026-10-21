@@ -14,7 +14,7 @@
 
 <body>
 
-    
+
     <!-- 遊戲主容器 -->
     <div class="game-container">
 
@@ -85,13 +85,34 @@
                 <span id="display-room-code" class="room-code">#----</span>
             </div>
 
-            <label>目前房間內成員 (最高 6 人)：</label>
+            <!-- 👑 房主專屬的設定面板 (插入頁面/卡片) -->
+            <div id="host-settings-panel"
+                style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; padding: 15px; margin: 15px 0;">
+                <h3
+                    style="margin-top: 0; font-size: 15px; color: #334155; display: flex; align-items: center; gap: 6px;">
+                    ⚙️ 遊戲房間設定 <span id="host-badge"
+                        style="font-size: 12px; background: #2563eb; color: white; padding: 2px 8px; border-radius: 4px;">房主控制區</span>
+                </h3>
+
+                <div style="margin-top: 10px;">
+                    <label style="font-size: 13px; color: #475569; display: block; margin-bottom: 4px;">單字範圍難度：</label>
+                    <select id="select-vocab-level"
+                        style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1; background: #fff;">
+                        <option value="all">全部單字 (4~6 級)</option>
+                        <option value="level4">僅 4 級單字</option>
+                        <option value="level5">僅 5 級單字</option>
+                        <option value="level6">僅 6 級單字</option>
+                    </select>
+                </div>
+            </div>
+
+            <label>目前房間內成員：</label>
             <div id="player-list" class="player-list">
                 <!-- 動態生成的成員會在這裡 -->
             </div>
 
             <div class="btn-grid">
-                <button id="btn-start-game" class="btn btn-primary">開始大逃殺！</button>
+                <button id="btn-start-game" class="btn btn-primary">開始多人生存戰！</button>
                 <button id="btn-leave-room" class="btn btn-danger">離開房間</button>
             </div>
         </div>
