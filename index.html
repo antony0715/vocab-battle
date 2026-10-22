@@ -4,33 +4,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>6人詞彙大逃殺 - Vocabulary Battle Royale</title>
+    <title>英語單字King-Vocabulary Battle Royale</title>
     <link rel="stylesheet" href="style.css">
 
-    <!-- Firebase SDK (Realtime Database) 放這裡才對 -->
+    <!-- Firebase SDK (Realtime Database) -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 </head>
 
 <body>
 
-
-    <!-- 遊戲主容器 -->
     <div class="game-container">
 
         <!-- ==================== 1. 遊戲大廳畫面 ==================== -->
         <div id="lobby-screen" class="screen">
 
-            <!-- 🏆 全伺服器排行榜區塊（移入大廳最上方） -->
+            <!-- 🏆 全伺服器排行榜 -->
             <div id="global-leaderboard-card"
                 style="width: 100%; margin: 0 0 16px 0; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 14px 18px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); box-sizing: border-box;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <div
+                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; flex-wrap: wrap;">
                     <span style="font-weight: bold; color: #1e293b; font-size: 15px;">🏆 全伺服器英雄榜</span>
-                    <span style="font-size: 13px; color: #2563eb; font-weight: bold;">我的最高紀錄：<span
-                            id="best-time-display">0</span> 秒</span>
+                    <span id="best-record-text" style="font-size: 13px; color: #2563eb; font-weight: bold;">我的最高紀錄：0 秒</span>
                 </div>
 
-                <!-- 動態排行榜清單 -->
+                <!-- 排行榜分頁：秒數 / 分數 -->
+                <div class="lb-tabs">
+                    <button class="lb-tab active" data-tab="time">⏱️ 生存秒數榜</button>
+                    <button class="lb-tab" data-tab="score">⭐ 分數榜</button>
+                </div>
+
                 <div id="leaderboard-list"
                     style="max-height: 260px; overflow-y: auto; background: #ffffff; padding: 20px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 13px; color: #64748b;">
                     <div style="text-align: center; padding: 8px 0; color: #94a3b8;">載入中...</div>
@@ -40,29 +43,43 @@
             <h1>英語單字King</h1>
             <p class="subtitle">Vocabulary Battle Royale & Rank</p>
 
-            <!-- 玩家暱稱輸入 -->
             <div class="input-group">
                 <label for="player-name">你的玩家暱稱：</label>
                 <input type="text" id="player-name" placeholder="請輸入暱稱..." value="">
             </div>
 
-            <!-- 主選單：只顯示單人遊戲與多人遊戲 -->
+            <!-- 主選單 -->
             <div id="main-menu-options" style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;">
                 <button id="btn-goto-single" class="btn btn-primary" style="background: #2563eb;">單人遊戲</button>
-                <button id="btn-goto-multi" class="btn btn-secondary">多人遊戲(暫不開放)</button>
+                <button id="btn-goto-multi" class="btn btn-secondary" >多人遊戲(測試版)</button>
+                <button id="btn-goto-bank" class="btn btn-secondary">📚 我的錯題庫</button>
+                <button id="btn-help" class="btn btn-secondary">❓ 使用說明</button>
             </div>
 
-            <!-- 單人模式子選單 (點擊單人遊戲後展開) -->
+            <!-- 單人模式子選單 -->
             <div id="single-mode-menu" class="hidden"
                 style="flex-direction: column; gap: 10px; margin-top: 15px; border-top: 2px dashed #e2e8f0; padding-top: 15px;">
                 <button id="btn-start-ranked" class="btn btn-primary" style="background: #2563eb;">排位賽模式
                     (4~6級字・計入排行榜)</button>
                 <button id="btn-start-practice" class="btn btn-primary" style="background: #259feb;">練習模式
-                    (自選題庫・輕鬆複習)</button>
+                    (自選題庫・無壓力複習)</button>
                 <button id="btn-back-to-main" class="btn btn-secondary" style="margin-top: 5px;">返回主選單</button>
             </div>
 
-            <!-- 多人房間代碼輸入框 (點擊多人遊戲後展開) -->
+            <!-- 練習模式：選擇題庫 -->
+            <div id="practice-setup-box" class="hidden"
+                style="flex-direction: column; gap: 10px; margin-top: 15px; border-top: 2px dashed #e2e8f0; padding-top: 15px;">
+                <p style="font-weight: 600; color: #475569; font-size: 14px;">請選擇練習題庫（可複選）：</p>
+                <label class="check-row"><input type="checkbox" value="level4" checked> 4 級字</label>
+                <label class="check-row"><input type="checkbox" value="level5"> 5 級字</label>
+                <label class="check-row"><input type="checkbox" value="level6"> 6 級字</label>
+                <label class="check-row"><input type="checkbox" value="bank"> 📚 我的錯題庫 (<span
+                        id="practice-bank-count">0</span> 字)</label>
+                <button id="btn-practice-start" class="btn btn-primary">開始練習</button>
+                <button id="btn-practice-back" class="btn btn-secondary">返回</button>
+            </div>
+
+            <!-- 多人房間 -->
             <div id="multi-room-box" class="hidden"
                 style="flex-direction: column; margin-top: 15px; border-top: 2px dashed #e2e8f0; padding-top: 15px;">
                 <div class="input-group">
@@ -77,6 +94,7 @@
                     返回主選單</button>
             </div>
         </div>
+
         <!-- ==================== 2. 房間等待區 (最多 6 人) ==================== -->
         <div id="room-screen" class="screen hidden">
             <h1>戰前等待大廳</h1>
@@ -85,7 +103,6 @@
                 <span id="display-room-code" class="room-code">#----</span>
             </div>
 
-            <!-- 👑 房主專屬的設定面板 (插入頁面/卡片) -->
             <div id="host-settings-panel"
                 style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; padding: 15px; margin: 15px 0;">
                 <h3
@@ -93,7 +110,6 @@
                     ⚙️ 遊戲房間設定 <span id="host-badge"
                         style="font-size: 12px; background: #2563eb; color: white; padding: 2px 8px; border-radius: 4px;">房主控制區</span>
                 </h3>
-
                 <div style="margin-top: 10px;">
                     <label style="font-size: 13px; color: #475569; display: block; margin-bottom: 4px;">單字範圍難度：</label>
                     <select id="select-vocab-level"
@@ -107,11 +123,12 @@
             </div>
 
             <label>目前房間內成員：</label>
-            <div id="player-list" class="player-list">
-                <!-- 動態生成的成員會在這裡 -->
-            </div>
+            <div id="player-list" class="player-list"></div>
 
             <div class="btn-grid">
+                <!-- 非房主：切換準備狀態 -->
+                <button id="btn-toggle-ready" class="btn btn-secondary" style="display: none;">✅ 準備就緒</button>
+                <!-- 房主：全員準備後才能開始 -->
                 <button id="btn-start-game" class="btn btn-primary">開始多人生存戰！</button>
                 <button id="btn-leave-room" class="btn btn-danger">離開房間</button>
             </div>
@@ -120,42 +137,115 @@
         <!-- ==================== 3. 戰鬥競技場畫面 ==================== -->
         <div id="battle-screen" class="screen hidden">
 
-            <!-- 上方：6人血量與即時進度儀表板 -->
-            <div class="battle-scoreboard" id="scoreboard">
-                <!-- 動態生成的真實玩家血條會自動長在這裡 -->
-            </div>
+            <div class="battle-scoreboard" id="scoreboard"></div>
 
-            <!-- 中央：答題核心區 -->
             <div class="question-box" id="question-box-container">
                 <p style="color: #888; margin-bottom: 5px;">請選擇正確的中文意思：</p>
                 <div class="word-display" id="current-word">載入中...</div>
 
-                <div id="options-container" class="options-grid">
-                    <!-- JS 會自動在這裡產生 4 個選項按鈕 -->
+                <div id="options-container" class="options-grid"></div>
+
+                <div class="combo-streak" id="combo-display">🔥 連擊：0 Combo！</div>
+
+                <!-- 排位賽：答題統計與分數 -->
+                <div id="stats-display" class="stats-bar">
+                    <div>⭐ 分數 <b id="score-display">0</b></div>
+                    <div>✅ <b id="stat-correct">0</b></div>
+                    <div>❌ <b id="stat-wrong">0</b></div>
+                    <div> 共 <b id="stat-total">0</b> 題</div>
+                    <div>📉 錯誤率 <b id="stat-rate">0.0%</b></div>
                 </div>
 
-                <div class="combo-streak" id="combo-display">
-                    🔥 連擊：0 Combo！
-                </div>
-                <!-- ⚡ 在這裡加入生存時間顯示 -->
-                <div style="text-align: center; font-weight: bold; color: #64748b; margin-top: 5px;">
+                <div id="survival-wrap" style="text-align: center; font-weight: bold; color: #64748b; margin-top: 5px;">
                     ⏱️ 生存時間：<span id="survival-timer">0</span> 秒
                 </div>
-                <!-- ⚡ 錯題回顧彈窗 / 區域 -->
+
+                <!-- 練習模式：立即結算 -->
+                <button id="btn-finish-practice" class="btn btn-danger" style="display: none;">🏁 立即結算</button>
+
+                <!-- 本局結算 / 錯題檢討 -->
                 <div id="wrong-words-container" class="hidden"
                     style="margin-top: 20px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 16px; padding: 16px; text-align: left;">
-                    <h3 style="color: #ef4444; font-size: 16px; margin-bottom: 12px; text-align: center;">📖 本局錯題檢討</h3>
+                    <div id="result-summary"></div>
+                    <h3 style="color: #ef4444; font-size: 16px; margin: 12px 0 6px; text-align: center;">📖 本局錯題檢討</h3>
+                    <p id="review-hint" style="font-size: 12px; color: #64748b; text-align: center; margin-bottom: 8px;">
+                        👉 將單字向右滑動即可加入「我的錯題庫」</p>
+                    <button id="btn-add-all-wrong" class="btn btn-primary"
+                        style="width: 100%; padding: 8px; margin-bottom: 10px;">全部加入我的錯題庫</button>
                     <div id="wrong-words-list"
-                        style="display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto;">
-                        <!-- 動態產生錯題 -->
+                        style="display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto;">
                     </div>
                     <button id="btn-close-review" class="btn btn-secondary"
                         style="width: 100%; margin-top: 12px; padding: 8px;">確定並返回大廳</button>
                 </div>
             </div>
-
         </div>
 
+        <!-- ==================== 4. 我的錯題庫 ==================== -->
+        <div id="bank-screen" class="screen hidden">
+            <h1>📚 我的錯題庫</h1>
+            <p class="subtitle" id="bank-count">共 0 個單字</p>
+
+            <div class="bank-tabs" id="bank-level-tabs">
+                <button class="lb-tab active" data-level="all">全部</button>
+                <button class="lb-tab" data-level="level4">4 級</button>
+                <button class="lb-tab" data-level="level5">5 級</button>
+                <button class="lb-tab" data-level="level6">6 級</button>
+            </div>
+
+            <div class="bank-toolbar">
+                <select id="bank-sort">
+                    <option value="time">排序：最近加入</option>
+                    <option value="alpha">排序：字首 A–Z（分組）</option>
+                    <option value="level">排序：依級數分組</option>
+                </select>
+                <input type="text" id="bank-search" placeholder="🔍 搜尋單字或中文...">
+            </div>
+
+            <div id="bank-list"></div>
+
+            <div class="btn-grid">
+                <button id="btn-bank-practice" class="btn btn-primary">📖 用錯題庫練習</button>
+                <button id="btn-bank-clear" class="btn btn-danger">清空錯題庫</button>
+                <button id="btn-bank-back" class="btn btn-secondary">返回主選單</button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ==================== 使用說明彈窗 ==================== -->
+    <div id="help-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <h2>❓ 使用說明</h2>
+            <div class="help-content">
+                <h4>🎮 單人遊戲</h4>
+                <ul>
+                    <li><b>排位賽</b>：4~6 級單字混合出題。血量會持續倒數，答對 +15 血、答錯 -25 血，血量歸零即結束。成績計入排行榜。</li>
+                    <li><b>計分</b>：答對一題 5 分，每一個連擊 (Combo) 讓每題多賺 1%。畫面會即時顯示答對、答錯、總題數與錯誤率。</li>
+                    <li><b>練習模式</b>：可複選 4 級、5 級、6 級、我的錯題庫。沒有血量、計時與連擊，想練多久都行，按「立即結算」結束。</li>
+                    <li><b>不確定功能</b>：若覺得這個單字不確定 可以先點擊題目 變成黃色代表之後會加入錯題庫 再次點擊以取消</li>
+                </ul>
+                <h4>👥 多人遊戲（最多 6 人）</h4>
+                <ul>
+                    <li>房主「建立房間」，把 4 碼代碼告訴朋友；朋友輸入代碼「加入房間」。</li>
+                    <li>非房主玩家按「準備就緒」，想暫停可改按「稍等一下」。房主能看到每個人的狀態，全員準備好才能開始。</li>
+                    <li>答對會回血並攻擊對手，答錯會自己扣血。最後存活的人獲勝！</li>
+                    <li>結束後每個人可自行返回房間，再次準備就緒後開下一局。</li>
+                </ul>
+                <h4>📚 我的錯題庫</h4>
+                <ul>
+                    <li>每局結束後，在「本局錯題檢討」中把單字<b>向右滑動</b>即可加入錯題庫，或按「全部加入我的錯題庫」。</li>
+                    <li>遊戲中點擊題目單字，可標記為「不熟」並列入本局檢討。</li>
+                    <li>在錯題庫可依級數篩選、依字首或級數分組、搜尋單字；已經會的單字按「我會了」即可移除。</li>
+                    <li>錯題庫存在你這台裝置的瀏覽器中。</li>
+                </ul>
+                <h4>🏆 排行榜</h4>
+                <ul>
+                    <li>大廳最上方可切換「生存秒數榜」與「分數榜」，只有排位賽成績會上榜。</li>
+                </ul>
+            </div>
+            <button id="btn-help-close" class="btn btn-primary" style="width: 100%; margin-top: 12px;">我知道了</button>
+        </div>
     </div>
 
     <!-- 載入所有級數的單字庫 -->
@@ -163,8 +253,7 @@
     <script src="vocab_level5.js"></script>
     <script src="vocab_level6.js"></script>
 
-    <!-- 最後載入主邏輯 -->
-    <script src="app.js?v=3"></script>
+    <script src="app.js?v=4"></script>
 </body>
 
 </html>

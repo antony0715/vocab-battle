@@ -314,3 +314,78 @@ h1 {
     animation: floatDamageText 0.6s ease-out forwards;
     z-index: 999;
 }
+
+/* ==================== 新增功能樣式 ==================== */
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* 排行榜 / 錯題庫 分頁 */
+.lb-tabs, .bank-tabs { display: flex; gap: 6px; margin-bottom: 8px; }
+.lb-tab {
+    flex: 1; padding: 8px 6px; border-radius: 10px; border: 1px solid #cbd5e1;
+    background: #fff; color: #475569; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.lb-tab.active { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+
+/* 練習模式題庫選擇 */
+.check-row {
+    display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+    background: #f1f5f9; border-radius: 10px; font-size: 15px; cursor: pointer;
+}
+.check-row input { width: 18px; height: 18px; }
+
+/* 排位賽統計列 */
+.stats-bar {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px;
+    font-size: 13px; color: #475569; background: #f8fafc;
+    border: 1px solid #e2e8f0; border-radius: 12px; padding: 8px 10px;
+}
+.stats-bar b { color: #0f172a; }
+
+/* 結算摘要 */
+.summary-box { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; text-align: center; }
+.summary-title { font-weight: 800; font-size: 16px; color: #0f172a; margin-bottom: 6px; }
+.summary-line { font-size: 14px; color: #475569; margin-bottom: 2px; }
+.summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; font-size: 13px; color: #64748b; }
+.summary-grid div { background: #f1f5f9; border-radius: 8px; padding: 6px; }
+.summary-grid b { display: block; font-size: 18px; color: #0f172a; }
+
+/* 錯題卡片：向右滑動加入 */
+.swipe-wrap { position: relative; border-radius: 10px; overflow: hidden; background: #22c55e; flex-shrink: 0; }
+.swipe-bg { position: absolute; inset: 0; display: flex; align-items: center; padding-left: 14px; color: #fff; font-weight: 700; font-size: 14px; }
+.swipe-card {
+    position: relative; background: #fff; padding: 10px 12px; border-left: 4px solid #ef4444;
+    font-size: 14px; touch-action: pan-y; user-select: none; -webkit-user-select: none;
+    display: flex; justify-content: space-between; align-items: center; gap: 8px;
+}
+.swipe-card.added { border-left-color: #22c55e; background: #f0fdf4; }
+.mini-add-btn {
+    border: 1px solid #3b82f6; background: #fff; color: #3b82f6; border-radius: 8px;
+    padding: 4px 8px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.mini-add-btn:disabled { border-color: #22c55e; color: #16a34a; cursor: default; }
+
+/* 錯題庫頁面 */
+.bank-toolbar { display: flex; flex-direction: column; gap: 8px; }
+.bank-toolbar select, .bank-toolbar input {
+    padding: 10px 12px; border-radius: 10px; border: 1px solid #cbd5e1; background: #f1f5f9; font-size: 14px;
+}
+#bank-list { max-height: 340px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.bank-group { font-size: 13px; font-weight: 800; color: #3b82f6; padding: 6px 4px 2px; position: sticky; top: 0; background: #fff; }
+.bank-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px 12px; }
+.bank-word { font-weight: 700; color: #0f172a; }
+.bank-meaning { font-size: 13px; color: #64748b; margin-top: 2px; }
+.lv-badge { font-size: 11px; background: #dbeafe; color: #1d4ed8; border-radius: 6px; padding: 1px 6px; margin-left: 4px; font-weight: 600; }
+.bank-remove { border: none; background: #dcfce7; color: #16a34a; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.bank-empty { text-align: center; color: #94a3b8; padding: 24px 0; font-size: 14px; }
+
+/* 說明彈窗 */
+.modal-overlay {
+    position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55); z-index: 2000;
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.modal-card { background: #fff; border-radius: 20px; padding: 22px 20px; width: 100%; max-width: 440px; max-height: 85vh; display: flex; flex-direction: column; }
+.modal-card h2 { text-align: center; margin-bottom: 10px; font-size: 20px; }
+.help-content { overflow-y: auto; font-size: 14px; color: #334155; line-height: 1.6; }
+.help-content h4 { margin: 12px 0 4px; color: #1d4ed8; }
+.help-content ul { padding-left: 20px; }
+.help-content li { margin-bottom: 4px; }
