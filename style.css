@@ -265,3 +265,52 @@ h1 {
     text-align: center;
     margin-top: 5px;
 }
+
+/* ==================== 題目文字區塊閃爍特效 (純色圓角邊框) ==================== */
+#current-word {
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+    border: 5px solid transparent; /* 預設透明，避免版面跳動 */
+    border-radius: 12px;          /* 圓角弧度 */
+    padding: 8px 12px;            /* 讓邊框與文字保持一點舒適的間距 */
+}
+
+/* 答對：題目區閃綠框 */
+#current-word.flash-correct {
+    border-color: #22c55e !important;
+}
+
+/* 答錯：題目區閃紅框 */
+#current-word.flash-wrong {
+    border-color: #ef4444 !important;
+}
+
+/* ==================== 通用隱藏類別 ==================== */
+.hidden {
+    display: none !important;
+}
+
+/* ==================== 自己的血條受傷特效 ==================== */
+@keyframes rowDamageFlash {
+    0% { background-color: #ffffff; border-color: #cbd5e1; }
+    50% { background-color: #fee2e2; border-color: #ef4444; } /* 閃淺紅色背景與紅框 */
+    100% { background-color: #ffffff; border-color: #cbd5e1; }
+}
+
+.row-flash-damage {
+    animation: rowDamageFlash 0.3s ease-in-out;
+}
+
+@keyframes floatDamageText {
+    0% { transform: translateY(0) scale(1); opacity: 1; }
+    100% { transform: translateY(-30px) scale(1.2); opacity: 0; }
+}
+
+.floating-damage {
+    position: absolute;
+    color: #ef4444;
+    font-weight: bold;
+    font-size: 20px;
+    pointer-events: none;
+    animation: floatDamageText 0.6s ease-out forwards;
+    z-index: 999;
+}

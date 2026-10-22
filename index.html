@@ -1,45 +1,82 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>6人詞彙大逃殺 - Vocabulary Battle Royale</title>
     <link rel="stylesheet" href="style.css">
-    
+
     <!-- Firebase SDK (Realtime Database) 放這裡才對 -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 </head>
+
 <body>
 
+
+    <!-- 遊戲主容器 -->
     <div class="game-container">
 
         <!-- ==================== 1. 遊戲大廳畫面 ==================== -->
         <div id="lobby-screen" class="screen">
-            <h1>你背的不夠多</h1>
-            <p class="subtitle">Vocabulary Battle Royale </p>
-            
-            <!-- ⚡ 在這裡加入最高紀錄顯示 -->
-            <div style="background: #f1f5f9; padding: 12px; border-radius: 12px; text-align: center; font-weight: bold; color: #3b82f6;">
-            🏆 最高生存紀錄：<span id="best-time-display">0</span> 秒
+
+            <!-- 🏆 全伺服器排行榜區塊（移入大廳最上方） -->
+            <div id="global-leaderboard-card"
+                style="width: 100%; margin: 0 0 16px 0; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 14px 18px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); box-sizing: border-box;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span style="font-weight: bold; color: #1e293b; font-size: 15px;">🏆 全伺服器英雄榜</span>
+                    <span style="font-size: 13px; color: #2563eb; font-weight: bold;">我的最高紀錄：<span
+                            id="best-time-display">0</span> 秒</span>
+                </div>
+
+                <!-- 動態排行榜清單 -->
+                <div id="leaderboard-list"
+                    style="max-height: 260px; overflow-y: auto; background: #ffffff; padding: 20px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 13px; color: #64748b;">
+                    <div style="text-align: center; padding: 8px 0; color: #94a3b8;">載入中...</div>
+                </div>
             </div>
-            
+
+            <h1>英語單字King</h1>
+            <p class="subtitle">Vocabulary Battle Royale & Rank</p>
+
+            <!-- 玩家暱稱輸入 -->
             <div class="input-group">
                 <label for="player-name">你的玩家暱稱：</label>
-                <input type="text" id="player-name" placeholder="請輸入暱稱..." value="單字小高手">
+                <input type="text" id="player-name" placeholder="請輸入暱稱..." value="">
             </div>
 
-            <div class="input-group" id="room-code-box">
-                <label for="room-code-input">房間代碼 (加入房間時填寫)：</label>
-                <input type="text" id="room-code-input" placeholder="例如: 4982" maxlength="4">
+            <!-- 主選單：只顯示單人遊戲與多人遊戲 -->
+            <div id="main-menu-options" style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;">
+                <button id="btn-goto-single" class="btn btn-primary" style="background: #2563eb;">單人遊戲</button>
+                <button id="btn-goto-multi" class="btn btn-secondary">多人遊戲(暫不開放)</button>
             </div>
 
-            <div class="btn-grid">
-                <button id="btn-create-room" class="btn btn-primary">建立房間 (房主)</button>
-                <button id="btn-join-room" class="btn btn-secondary">加入房間</button>
+            <!-- 單人模式子選單 (點擊單人遊戲後展開) -->
+            <div id="single-mode-menu" class="hidden"
+                style="flex-direction: column; gap: 10px; margin-top: 15px; border-top: 2px dashed #e2e8f0; padding-top: 15px;">
+                <button id="btn-start-ranked" class="btn btn-primary" style="background: #2563eb;">排位賽模式
+                    (4~6級字・計入排行榜)</button>
+                <button id="btn-start-practice" class="btn btn-primary" style="background: #259feb;">練習模式
+                    (自選題庫・輕鬆複習)</button>
+                <button id="btn-back-to-main" class="btn btn-secondary" style="margin-top: 5px;">返回主選單</button>
+            </div>
+
+            <!-- 多人房間代碼輸入框 (點擊多人遊戲後展開) -->
+            <div id="multi-room-box" class="hidden"
+                style="flex-direction: column; margin-top: 15px; border-top: 2px dashed #e2e8f0; padding-top: 15px;">
+                <div class="input-group">
+                    <label for="room-code-input">房間代碼 (加入房間時填寫)：</label>
+                    <input type="text" id="room-code-input" placeholder="例如: 4982" maxlength="4">
+                </div>
+                <div class="btn-grid">
+                    <button id="btn-create-room" class="btn btn-primary">建立房間 (房主)</button>
+                    <button id="btn-join-room" class="btn btn-secondary">加入房間</button>
+                </div>
+                <button id="btn-back-from-multi" class="btn btn-secondary" style="width: 100%; margin-top: 10px;">⬅️
+                    返回主選單</button>
             </div>
         </div>
-
         <!-- ==================== 2. 房間等待區 (最多 6 人) ==================== -->
         <div id="room-screen" class="screen hidden">
             <h1>戰前等待大廳</h1>
@@ -48,20 +85,41 @@
                 <span id="display-room-code" class="room-code">#----</span>
             </div>
 
-            <label>目前房間內成員 (最高 6 人)：</label>
+            <!-- 👑 房主專屬的設定面板 (插入頁面/卡片) -->
+            <div id="host-settings-panel"
+                style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; padding: 15px; margin: 15px 0;">
+                <h3
+                    style="margin-top: 0; font-size: 15px; color: #334155; display: flex; align-items: center; gap: 6px;">
+                    ⚙️ 遊戲房間設定 <span id="host-badge"
+                        style="font-size: 12px; background: #2563eb; color: white; padding: 2px 8px; border-radius: 4px;">房主控制區</span>
+                </h3>
+
+                <div style="margin-top: 10px;">
+                    <label style="font-size: 13px; color: #475569; display: block; margin-bottom: 4px;">單字範圍難度：</label>
+                    <select id="select-vocab-level"
+                        style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1; background: #fff;">
+                        <option value="all">全部單字 (4~6 級)</option>
+                        <option value="level4">僅 4 級單字</option>
+                        <option value="level5">僅 5 級單字</option>
+                        <option value="level6">僅 6 級單字</option>
+                    </select>
+                </div>
+            </div>
+
+            <label>目前房間內成員：</label>
             <div id="player-list" class="player-list">
                 <!-- 動態生成的成員會在這裡 -->
             </div>
 
             <div class="btn-grid">
-                <button id="btn-start-game" class="btn btn-primary">開始大逃殺！</button>
+                <button id="btn-start-game" class="btn btn-primary">開始多人生存戰！</button>
                 <button id="btn-leave-room" class="btn btn-danger">離開房間</button>
             </div>
         </div>
 
         <!-- ==================== 3. 戰鬥競技場畫面 ==================== -->
         <div id="battle-screen" class="screen hidden">
-            
+
             <!-- 上方：6人血量與即時進度儀表板 -->
             <div class="battle-scoreboard" id="scoreboard">
                 <!-- 動態生成的真實玩家血條會自動長在這裡 -->
@@ -71,7 +129,7 @@
             <div class="question-box" id="question-box-container">
                 <p style="color: #888; margin-bottom: 5px;">請選擇正確的中文意思：</p>
                 <div class="word-display" id="current-word">載入中...</div>
-                
+
                 <div id="options-container" class="options-grid">
                     <!-- JS 會自動在這裡產生 4 個選項按鈕 -->
                 </div>
@@ -81,15 +139,18 @@
                 </div>
                 <!-- ⚡ 在這裡加入生存時間顯示 -->
                 <div style="text-align: center; font-weight: bold; color: #64748b; margin-top: 5px;">
-                ⏱️ 生存時間：<span id="survival-timer">0</span> 秒
+                    ⏱️ 生存時間：<span id="survival-timer">0</span> 秒
                 </div>
                 <!-- ⚡ 錯題回顧彈窗 / 區域 -->
-                <div id="wrong-words-container" class="hidden" style="margin-top: 20px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 16px; padding: 16px; text-align: left;">
+                <div id="wrong-words-container" class="hidden"
+                    style="margin-top: 20px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 16px; padding: 16px; text-align: left;">
                     <h3 style="color: #ef4444; font-size: 16px; margin-bottom: 12px; text-align: center;">📖 本局錯題檢討</h3>
-                    <div id="wrong-words-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto;">
-                    <!-- 動態產生錯題 -->
+                    <div id="wrong-words-list"
+                        style="display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto;">
+                        <!-- 動態產生錯題 -->
                     </div>
-                    <button id="btn-close-review" class="btn btn-secondary" style="width: 100%; margin-top: 12px; padding: 8px;">確定並返回大廳</button>
+                    <button id="btn-close-review" class="btn btn-secondary"
+                        style="width: 100%; margin-top: 12px; padding: 8px;">確定並返回大廳</button>
                 </div>
             </div>
 
@@ -101,8 +162,9 @@
     <script src="vocab_level4.js"></script>
     <script src="vocab_level5.js"></script>
     <script src="vocab_level6.js"></script>
-    
+
     <!-- 最後載入主邏輯 -->
-    <script src="app.js"></script>
+    <script src="app.js?v=3"></script>
 </body>
+
 </html>
