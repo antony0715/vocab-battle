@@ -24,7 +24,7 @@
                 style="width: 100%; margin: 0 0 16px 0; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 14px 18px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); box-sizing: border-box;">
                 <div
                     style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; flex-wrap: wrap;">
-                    <span style="font-weight: bold; color: #1e293b; font-size: 15px;">🏆 全伺服器英雄榜</span>
+                    <span style="font-weight: bold; color: #1e293b; font-size: 15px;">🏆 全伺服器排行榜</span>
                     <span id="best-record-text" style="font-size: 13px; color: #2563eb; font-weight: bold;">我的最高紀錄：0 秒</span>
                 </div>
 
@@ -51,7 +51,7 @@
             <!-- 主選單 -->
             <div id="main-menu-options" style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;">
                 <button id="btn-goto-single" class="btn btn-primary" style="background: #2563eb;">單人遊戲</button>
-                <button id="btn-goto-multi" class="btn btn-secondary" >多人遊戲(測試版)</button>
+                <button id="btn-goto-multi" class="btn btn-secondary" style="background: #259febdb;">多人遊戲(測試版)</button>
                 <button id="btn-goto-bank" class="btn btn-secondary">📚 我的錯題庫</button>
                 <button id="btn-help" class="btn btn-secondary">❓ 使用說明</button>
             </div>
@@ -90,8 +90,8 @@
                     <button id="btn-create-room" class="btn btn-primary">建立房間 (房主)</button>
                     <button id="btn-join-room" class="btn btn-secondary">加入房間</button>
                 </div>
-                <button id="btn-back-from-multi" class="btn btn-secondary" style="width: 100%; margin-top: 10px;">⬅️
-                    返回主選單</button>
+                <button id="btn-back-from-multi" class="btn btn-secondary" style="width: 100%; margin-top: 10px;">
+        返回主選單</button>
             </div>
         </div>
 
@@ -161,7 +161,7 @@
                 </div>
 
                 <!-- 練習模式：立即結算 -->
-                <button id="btn-finish-practice" class="btn btn-danger" style="display: none;">🏁 立即結算</button>
+                <button id="btn-finish-practice" class="btn btn-danger" style="display: none;">立即結算</button>
 
                 <!-- 本局結算 / 錯題檢討 -->
                 <div id="wrong-words-container" class="hidden"
@@ -244,7 +244,7 @@
                     <li>大廳最上方可切換「生存秒數榜」與「分數榜」，只有排位賽成績會上榜。</li>
                 </ul>
             </div>
-            <button id="btn-help-close" class="btn btn-primary" style="width: 100%; margin-top: 12px;">我知道了</button>
+            <button id="btn-help-close" class="btn btn-primary" style="width: 100%; margin-top: 12px;">懂到</button>
         </div>
     </div>
 

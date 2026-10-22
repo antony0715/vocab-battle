@@ -1,4 +1,4 @@
-const vocabLevel6 = [
+const level6Vocab = [
     // ==================== Part 1: A ～ C ====================
     // A
     { word: "abate", meaning: "減輕、減弱", level: 6 },

@@ -315,7 +315,7 @@ function renderLeaderboard() {
     const list = lbData[lbTab];
     const unit = lbTab === 'time' ? '秒' : '分';
     if (!list || !list.length) {
-        el.innerHTML = '<div style="text-align: center; padding: 8px 0; color: #94a3b8;">目前尚無排行榜資料</div>';
+        el.innerHTML = '<div style="text-align: center; padding: 8px 0; color: #94a3b8;">載入中...</div>';
         return;
     }
     el.innerHTML = list.map((item, i) => {
