@@ -2,6 +2,15 @@
 <html lang="zh-TW">
 
 <head>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-HSQHWFE2MD"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag() { dataLayer.push(arguments); }
+        gtag('js', new Date());
+
+        gtag('config', 'G-HSQHWFE2MD');
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>英語單字King-Vocabulary Battle Royale</title>
@@ -25,7 +34,8 @@
                 <div
                     style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; flex-wrap: wrap;">
                     <span style="font-weight: bold; color: #1e293b; font-size: 15px;">🏆 全伺服器排行榜</span>
-                    <span id="best-record-text" style="font-size: 13px; color: #2563eb; font-weight: bold;">我的最高紀錄：0 秒</span>
+                    <span id="best-record-text" style="font-size: 13px; color: #2563eb; font-weight: bold;">我的最高紀錄：0
+                        秒</span>
                 </div>
 
                 <!-- 排行榜分頁：秒數 / 分數 -->
@@ -51,7 +61,8 @@
             <!-- 主選單 -->
             <div id="main-menu-options" style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;">
                 <button id="btn-goto-single" class="btn btn-primary" style="background: #2563eb;">單人遊戲</button>
-                <button id="btn-goto-multi" class="btn btn-secondary" style="background: #259febdb; color: white;">多人遊戲(測試版)</button>
+                <button id="btn-goto-multi" class="btn btn-secondary"
+                    style="background: #259febdb; color: white;">多人遊戲(測試版)</button>
                 <button id="btn-goto-bank" class="btn btn-secondary">📚 我的錯題庫</button>
                 <button id="btn-help" class="btn btn-secondary">❓ 使用說明</button>
             </div>
@@ -91,7 +102,7 @@
                     <button id="btn-join-room" class="btn btn-secondary">加入房間</button>
                 </div>
                 <button id="btn-back-from-multi" class="btn btn-secondary" style="width: 100%; margin-top: 10px;">
-        返回主選單</button>
+                    返回主選單</button>
             </div>
         </div>
 
@@ -168,7 +179,8 @@
                     style="margin-top: 20px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 16px; padding: 16px; text-align: left;">
                     <div id="result-summary"></div>
                     <h3 style="color: #ef4444; font-size: 16px; margin: 12px 0 6px; text-align: center;">📖 本局錯題檢討</h3>
-                    <p id="review-hint" style="font-size: 12px; color: #64748b; text-align: center; margin-bottom: 8px;">
+                    <p id="review-hint"
+                        style="font-size: 12px; color: #64748b; text-align: center; margin-bottom: 8px;">
                         👉 將單字向右滑動即可加入「我的錯題庫」</p>
                     <button id="btn-add-all-wrong" class="btn btn-primary"
                         style="width: 100%; padding: 8px; margin-bottom: 10px;">全部加入我的錯題庫</button>
