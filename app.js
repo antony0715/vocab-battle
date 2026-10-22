@@ -7,7 +7,7 @@ const LEVEL_LABEL = { level4: '4級', level5: '5級', level6: '6級' };
 const MANUAL_MARK = '手動標記不熟';
 
 // ---------- 狀態 ----------
-let playerName = "帥哥或美女";
+let playerName = "訪客";
 let myHp = 100, myCombo = 0;
 let currentQuestion = null;
 let allVocabPool = [], activePool = [], distractPool = [], practicePool = [];
