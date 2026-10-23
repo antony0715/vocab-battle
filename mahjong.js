@@ -70,6 +70,10 @@ const Mahjong = (() => {
         code = c; ref = db.ref('mj/' + c);
         ref.child('players/' + key).onDisconnect().remove();
         ref.on('value', onRoom);
+        if (typeof Profile !== 'undefined' && Profile.getThumb) { // 頭像縮圖寫進房間
+            const r0 = ref;
+            Profile.getThumb().then(av => { if (av && r0 === ref) r0.child('players/' + key + '/avatar').set(av); }).catch(() => { });
+        }
         clearInterval(cdTimer);
         cdTimer = setInterval(() => {
             const el = $('mj-cd');
@@ -79,7 +83,7 @@ const Mahjong = (() => {
     function create() {
         key = safeKey(myName());
         const c = String(Math.floor(1000 + Math.random() * 9000)), r = db.ref('mj/' + c);
-        r.transaction(cur => cur ? undefined : { host: key, status: 'lobby', players: { [key]: { name: myName(), seat: 0 } } },
+        r.transaction(cur => cur ? undefined : { host: key, status: 'lobby', players: { [key]: { name: myName(), seat: 0, ready: true } } },
             (err, ok) => ok ? enter(c) : toast('建立失敗，請再試一次'));
     }
     function join() {
@@ -95,7 +99,7 @@ const Mahjong = (() => {
                 if (p[key] || Object.keys(p).length >= 4) return;
                 const used = Object.values(p).map(x => x.seat);
                 let seat = 0; while (used.includes(seat)) seat++;
-                p[key] = { name: myName(), seat }; return p;
+                p[key] = { name: myName(), seat, ready: false }; return p;
             }, (err, ok) => ok ? enter(c) : toast('無法加入（房間已滿或暱稱重複）'));
         });
     }
@@ -168,7 +172,7 @@ const Mahjong = (() => {
         ref.transaction(r => {
             done = false;
             if (!r || r.phase !== 'discard' || r.turn !== mySeat) return;
-            r.n = (r.n || 0) + 1; r.last = { ch, by: mySeat, n: r.n }; r.pile = (r.pile || '') + ch;
+            r.n = (r.n || 0) + 1; r.last = { ch, by: mySeat, n: r.n }; r.pile = (r.pile || '') + mySeat + ch;
             r.phase = 'claim'; r.claimEnd = Date.now() + CLAIM_MS; r.claims = null; r.counts[mySeat] = 16; done = true; return r;
         }, () => { if (done) { loose = loose.filter(i => i !== id); sel = []; render(); } });
     }
@@ -181,7 +185,7 @@ const Mahjong = (() => {
                 if (!best || c.w.length > best.w.length || (c.w.length === best.w.length && d < best.d)) best = { s, w: c.w, d };
             });
             if (best) {
-                r.turn = best.s; r.phase = 'discard'; r.pile = r.pile.slice(0, -1); r.counts[best.s] = 17;
+                r.turn = best.s; r.phase = 'discard'; r.pile = r.pile.slice(0, -2); r.counts[best.s] = 17;
                 const old = Object.values((r.melds && r.melds[best.s]) || {}); old.push(best.w);
                 r.melds = r.melds || {}; r.melds[best.s] = old; r.claimed = { seat: best.s, word: best.w, n };
             } else { r.turn = (r.last.by + 1) % 4; r.phase = 'draw'; }
@@ -237,30 +241,52 @@ const Mahjong = (() => {
     }
     function render() {
         if (!room || !ref) return;
+        if (drag && drag.on) return; // 拖曳中不重繪，放開後會自動重繪
         if (room.status === 'lobby') {
             const ps = Object.values(room.players || {}).sort((a, b) => a.seat - b.seat), isH = room.host === key;
-            body.innerHTML = `<div class="mj-lobby"><h2>🀄 房間 #${esc(code)}</h2>
-                ${[0, 1, 2, 3].map(s => { const p = ps.find(x => x.seat === s); return `<div class="mj-seat"><span>座位 ${s + 1}</span><b>${p ? esc(p.name) + (p.name && safeKey(p.name) === room.host ? ' 👑' : '') : '— 等待加入 —'}</b></div>`; }).join('')}
-                ${isH ? `<button class="btn btn-primary" data-a="start" ${ps.length === 4 && dict ? '' : 'disabled'}>${ps.length === 4 ? (dict ? '開始遊戲' : '字典載入中…') : `等待玩家 (${ps.length}/4)`}</button>` : '<div class="mj-note">等待房主開始…</div>'}
-                <button class="btn btn-secondary" data-a="leave">離開房間</button><div id="mj-dict" class="mj-note"></div></div>`;
+            const others = ps.filter(p => safeKey(p.name) !== room.host), readyN = others.filter(p => p.ready).length;
+            const allReady = ps.length === 4 && readyN === others.length;
+            const me = room.players[key], myReady = !!(me && me.ready);
+            const rows = [0, 1, 2, 3].map(s => {
+                const p = ps.find(x => x.seat === s);
+                if (!p) return '<div class="room-player"><span class="nm" style="opacity:.5">座位 ' + (s + 1) + '：等待加入…</span></div>';
+                const host = safeKey(p.name) === room.host, av = safeAvatar(p.avatar);
+                const tag = host ? '<span class="tag-host">👑 房主</span>' : p.ready ? '<span class="tag-ready">✅ 準備就緒</span>' : '<span class="tag-wait">⏳ 稍等一下</span>';
+                return `<div class="room-player"><span class="nm" style="display:flex;align-items:center;gap:8px;"><span class="avatar" style="width:32px;height:32px;font-size:14px;">${av ? `<img src="${esc(av)}" alt="">` : esc((p.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>${esc(p.name)}${safeKey(p.name) === key ? ' (你)' : ''}</span>${tag}</div>`;
+            }).join('');
+            body.innerHTML = `<div class="mj-lobby room-like"><h1>🀄 英文麻將等待大廳</h1>
+                <div class="room-header"><span>房間代碼：</span><span class="room-code">#${esc(code)}</span></div>
+                <label class="field-label">目前房間內成員（需 4 人）：</label><div class="player-list">${rows}</div>
+                <div class="btn-grid">
+                ${isH ? `<button class="btn btn-primary" data-a="start" ${allReady && dict ? '' : 'disabled'}>${ps.length < 4 ? `等待玩家加入 (${ps.length}/4)` : !allReady ? `等待玩家準備 (${readyN}/${others.length})` : dict ? '開始英文麻將！' : '字典載入中…'}</button>`
+                    : `<button class="btn ${myReady ? 'btn-secondary' : 'btn-primary'}" data-a="ready">${myReady ? '⏳ 稍等一下 (取消準備)' : '✅ 準備就緒'}</button>`}
+                <button class="btn btn-danger" data-a="leave">離開房間</button></div><div id="mj-dict" class="mj-note"></div></div>`;
             return;
         }
-        const r = room, myTurn = r.turn === mySeat, last = r.last;
-        const opp = [1, 2, 3].map(o => { const s = (mySeat + o) % 4; return `<div class="mj-opp ${r.turn === s ? 'turn' : ''}"><b>${esc(seatName(s))}</b><span>🀫 ${r.counts ? r.counts[s] : 0} 張</span><div>${meldsOf(s).map(w => `<i class="mj-meld">${esc(w.toUpperCase())}</i>`).join('')}</div></div>`; }).join('');
+        const r = room, myTurn = r.turn === mySeat, last = r.last, playing = r.status === 'playing';
+        const pl = s => Object.values(room.players || {}).find(x => x.seat === s) || {};
+        const avatar = (s, size) => { const p = pl(s), av = safeAvatar(p.avatar), nm = p.name || '?';
+            return `<div class="mj-av ${size} ${playing && r.turn === s ? 'turn' : ''}">${av ? `<img src="${esc(av)}" alt="">` : esc(nm.trim().charAt(0).toUpperCase() || '?')}</div>`; };
+        const pairs = [], pile = r.pile || '';
+        for (let i = 0; i + 1 < pile.length; i += 2) pairs.push({ s: +pile[i], c: pile[i + 1] });
+        const lastIdx = r.phase === 'claim' && pairs.length ? pairs.length - 1 : -1;
+        const zone = (s, cls) => `<div class="mj-dz ${cls}">${pairs.map((p, i) => p.s === s ? `<span class="mj-pc ${i === lastIdx ? 'last' : ''}">${p.c.toUpperCase()}</span>` : '').join('')}</div>`;
+        const melds = s => `<div class="mj-melds">${meldsOf(s).map(w => `<i class="mj-meld">${esc(w.toUpperCase())}</i>`).join('')}</div>`;
+        const backs = s => `<div class="mj-backs">${'<i></i>'.repeat(Math.max(0, (r.counts ? r.counts[s] : 0) - meldsOf(s).join('').length))}</div>`;
+        const opp = (o, cls) => { const s = (mySeat + o) % 4; return `<div class="mj-opp ${cls}"><div class="mj-who">${avatar(s, 'l')}<div class="mj-nm">${esc(seatName(s))}</div></div>${melds(s)}${backs(s)}</div>`; };
         let st;
-        if (r.status === 'ended') st = '本局結束';
-        else if (r.phase === 'claim') st = `${esc(seatName(last.by))} 打出 <b style="font-size:22px">${last.ch.toUpperCase()}</b>　✋ 搶牌倒數 <b id="mj-cd">${Math.max(0, Math.ceil((r.claimEnd - Date.now()) / 1000))}</b>`;
-        else st = myTurn ? (r.phase === 'draw' ? '摸牌中…' : '輪到你：選一張牌打出（或胡牌）') : `輪到 ${esc(seatName(r.turn))}`;
-        const pile = (r.pile || '').split('').map((c, i, a) => `<span class="mj-pc ${i === a.length - 1 && r.phase === 'claim' ? 'last' : ''}">${c.toUpperCase()}</span>`).join('');
-        const tileBtn = (id, act, extra = '') => { const k = sel.indexOf(id); return `<button class="mj-t ${k >= 0 ? 'sel' : ''}" data-a="${act}" data-id="${id}" ${extra}>${tiles[id].toUpperCase()}${k >= 0 && sel.length > 1 ? `<span class="no">${k + 1}</span>` : ''}</button>`; };
+        if (!playing) st = '本局結束';
+        else if (r.phase === 'claim') st = `${esc(seatName(last.by))} 打出 <b class="mj-big">${last.ch.toUpperCase()}</b><br>✋ 搶牌倒數 <b id="mj-cd">${Math.max(0, Math.ceil((r.claimEnd - Date.now()) / 1000))}</b>`;
+        else st = myTurn ? (r.phase === 'draw' ? '摸牌中…' : '輪到你：打出一張牌<br>或組好單字胡牌') : `輪到 ${esc(seatName(r.turn))}`;
+        const tileBtn = (id, a, extra = '') => { const k = sel.indexOf(id), v = 'aeiou'.includes(tiles[id]) ? 'v' : ''; return `<button class="mj-t ${v} ${k >= 0 ? 'sel' : ''}" data-a="${a}" data-id="${id}" ${extra}>${tiles[id].toUpperCase()}${k >= 0 && sel.length > 1 ? `<span class="no">${k + 1}</span>` : ''}</button>`; };
         const gHtml = groups.map((g, gi) => { const w = wordOf(g), ok = groupOk(g);
             return `<div class="mj-g ${ok ? 'ok' : 'bad'}"><span class="mj-gw">${w.toUpperCase()} ${ok ? '✓' : '✗'}</span>
                 <button class="mj-att" data-a="attl" data-g="${gi}" title="把選取的牌接在前面">＋</button>
-                ${g.map((id, k) => tileBtn(id, 'gtile', `data-g="${gi}"`)).join('')}
+                ${g.map(id => tileBtn(id, 'gtile', `data-g="${gi}"`)).join('')}
                 <button class="mj-att" data-a="attr" data-g="${gi}" title="把選取的牌接在後面">＋</button>
                 <button class="mj-un" data-a="ungroup" data-g="${gi}" title="拆開">✕</button></div>`; }).join('');
-        const mm = meldsOf(mySeat).map(w => `<div class="mj-g lock ok"><span class="mj-gw">🔒 ${esc(w.toUpperCase())}</span>${w.split('').map(c => `<button class="mj-t" disabled>${c.toUpperCase()}</button>`).join('')}</div>`).join('');
-        const canClaim = r.status === 'playing' && r.phase === 'claim' && last && last.by !== mySeat && !pending;
+        const mm = meldsOf(mySeat).map(w => `<div class="mj-g lock ok"><span class="mj-gw">🔒 ${esc(w.toUpperCase())}</span>${w.split('').map(c => `<button class="mj-t ${'aeiou'.includes(c) ? 'v' : ''}" disabled>${c.toUpperCase()}</button>`).join('')}</div>`).join('');
+        const canClaim = playing && r.phase === 'claim' && last && last.by !== mySeat && !pending;
         const acts = [
             `<button class="btn btn-secondary" data-a="form" ${sel.length < 2 || claimMode ? 'disabled' : ''}>🔗 組成單字</button>`,
             `<button class="btn btn-secondary" data-a="sort">🔤 整理</button>`,
@@ -269,17 +295,20 @@ const Mahjong = (() => {
             myTurn && r.phase === 'discard' ? `<button class="btn btn-danger" data-a="win" ${canWin() ? '' : 'disabled'}>🀄 胡牌！</button>` : '',
         ].join('');
         let overlay = '';
-        if (r.status === 'ended') {
+        if (!playing) {
             const res = r.result || {};
             overlay = `<div class="mj-result"><div>${res.aborted ? `<h2>⚠️ ${esc(res.name)} 離開了遊戲</h2>` : res.draw ? '<h2>🤝 牌庫已空，流局</h2>' :
                 `<h2>🏆 ${esc(res.name)} ${res.self ? '自摸' : '胡牌'}！共 ${res.tai} 台</h2>${(res.lines || []).map(l => `<div>${esc(l)}</div>`).join('')}`}
                 ${room.host === key ? '<button class="btn btn-primary" data-a="again">回到房間，再來一局</button>' : '<div class="mj-note">等待房主開始下一局…</div>'}
                 <button class="btn btn-secondary" data-a="leave">離開房間</button></div></div>`;
         }
-        body.innerHTML = `<div class="mj-game"><div class="mj-top">${opp}<button class="btn btn-secondary mj-exit" data-a="leave">離開</button></div>
-            <div class="mj-mid"><div class="mj-status">${st}　<small>牌庫剩 ${(r.deck || '').length}</small></div><div class="mj-pile">${pile}</div></div>
-            <div class="mj-me ${myTurn ? 'turn' : ''}"><div class="mj-rack">${mm}${gHtml}</div>
-            <div class="mj-rack">${loose.map(id => tileBtn(id, 'tile')).join('') || '<span class="mj-note">（沒有未組合的牌）</span>'}</div>
+        body.innerHTML = `<div class="mj-game">
+            <button class="btn btn-secondary mj-exit" data-a="leave">離開</button><div class="mj-deck">牌庫 ${(r.deck || '').length}</div>
+            <div class="mj-c-top">${opp(2, 'top')}</div><div class="mj-c-left">${opp(3, 'side')}</div><div class="mj-c-right">${opp(1, 'side')}</div>
+            <div class="mj-table">${zone((mySeat + 2) % 4, 'z-top')}${zone((mySeat + 3) % 4, 'z-left')}<div class="mj-center">${st}</div>${zone((mySeat + 1) % 4, 'z-right')}${zone(mySeat, 'z-bot')}</div>
+            <div class="mj-me ${myTurn && playing ? 'turn' : ''}"><div class="mj-mebar">${avatar(mySeat, 'm')}<b>${esc(myName())}</b></div>
+            <div class="mj-hand"><div class="mj-rack">${mm}${gHtml}</div>
+            <div class="mj-rack mj-loose">${loose.map(id => tileBtn(id, 'tile')).join('') || '<span class="mj-note">（沒有未組合的牌）</span>'}</div></div>
             <div class="mj-acts">${acts}</div></div></div>${overlay}`;
     }
 
@@ -287,7 +316,8 @@ const Mahjong = (() => {
     const act = (a, d) => {
         if (a === 'create') return create(); if (a === 'join') return join(); if (a === 'exit') return close();
         if (a === 'start') return startGame(); if (a === 'leave') return leave();
-        if (a === 'again') return ref.update({ status: 'lobby', result: null });
+        if (a === 'ready') { const p = room.players[key]; return ref.child('players/' + key + '/ready').set(!(p && p.ready)); }
+        if (a === 'again') { const u = { status: 'lobby', result: null }; Object.keys(room.players).forEach(k => { if (k !== room.host) u['players/' + k + '/ready'] = false; }); return ref.update(u); }
         if (!room || room.status !== 'playing') return;
         const id = +d.id, gi = +d.g;
         if (a === 'tile') sel = sel.includes(id) ? sel.filter(x => x !== id) : [...sel, id];
@@ -310,7 +340,63 @@ const Mahjong = (() => {
         else if (a === 'win') return win();
         render();
     };
-    body.addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (!b || b.disabled) return; playClickSound(); act(b.dataset.a, b.dataset); });
+    body.addEventListener('click', e => { if (Date.now() < suppressUntil) return; const b = e.target.closest('[data-a]'); if (!b || b.disabled) return; playClickSound(); act(b.dataset.a, b.dataset); });
+
+    // ---------- 拖曳整理手牌（可在散牌／單字之間拖；散牌排成合法單字時自動吸成一組）----------
+    let drag = null, suppressUntil = 0;
+    const isTileEl = el => el && (el.dataset.a === 'tile' || el.dataset.a === 'gtile');
+    function snap(id) { // 以被拖的牌為中心，找相鄰散牌中最長的合法單字（≥3 字母）
+        const pos = loose.indexOf(id); if (pos < 0) return;
+        let best = null;
+        for (let i = Math.max(0, pos - 13); i <= pos; i++) for (let j = pos; j < Math.min(loose.length, i + 14); j++) {
+            const len = j - i + 1; if (len < 3) continue;
+            const w = loose.slice(i, j + 1).map(x => tiles[x]).join('');
+            if (isWord(w) && (!best || len > best.len)) best = { i, len, w };
+        }
+        if (best) { groups.push(loose.splice(best.i, best.len)); sel = []; toast('🔗 自動組成單字：' + best.w.toUpperCase()); }
+    }
+    function moveTile(id, tgt, side) {
+        const gi = groups.findIndex(g => g.includes(id));
+        if (gi >= 0) { groups[gi] = groups[gi].filter(x => x !== id); if (groups[gi].length < 2) { loose.push(...groups[gi]); groups.splice(gi, 1); } }
+        else loose = loose.filter(x => x !== id);
+        sel = sel.filter(x => x !== id);
+        const off = side === 'r' ? 1 : 0;
+        if (tgt.end) { loose.push(id); return snap(id); }
+        const tg = groups.findIndex(g => g.includes(tgt.id));
+        if (tg >= 0) { const g = groups[tg]; g.splice(g.indexOf(tgt.id) + off, 0, id); return; }
+        const k = loose.indexOf(tgt.id);
+        if (k < 0) loose.push(id); else loose.splice(k + off, 0, id);
+        snap(id);
+    }
+    const clearMark = () => root.querySelectorAll('.drop-l,.drop-r,.drop-end').forEach(el => el.classList.remove('drop-l', 'drop-r', 'drop-end'));
+    body.addEventListener('pointerdown', e => {
+        const t = e.target.closest('.mj-t[data-id]');
+        if (!t || t.disabled || !isTileEl(t) || !room || room.status !== 'playing') return;
+        drag = { id: +t.dataset.id, el: t, sx: e.clientX, sy: e.clientY, on: false, ghost: null, tgt: null, side: 'l' };
+    });
+    window.addEventListener('pointermove', e => {
+        if (!drag) return;
+        if (!drag.on) {
+            if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 8) return;
+            drag.on = true; drag.ghost = drag.el.cloneNode(true); drag.ghost.className = 'mj-t mj-ghost ' + (drag.el.classList.contains('v') ? 'v' : '');
+            root.appendChild(drag.ghost); drag.el.classList.add('dragsrc');
+        }
+        drag.ghost.style.left = (e.clientX - 17) + 'px'; drag.ghost.style.top = (e.clientY - 34) + 'px';
+        clearMark(); drag.tgt = null;
+        const under = document.elementFromPoint(e.clientX, e.clientY), tt = under && under.closest('.mj-t[data-id]');
+        if (tt && tt !== drag.el && isTileEl(tt)) {
+            const rc = tt.getBoundingClientRect(); drag.side = e.clientX < rc.left + rc.width / 2 ? 'l' : 'r';
+            drag.tgt = { id: +tt.dataset.id }; tt.classList.add('drop-' + drag.side);
+        } else if (under && under.closest('.mj-loose')) { drag.tgt = { end: true }; under.closest('.mj-loose').classList.add('drop-end'); }
+    });
+    const endDrag = cancel => () => {
+        if (!drag) return; const d = drag; drag = null;
+        if (!d.on) return;
+        d.ghost.remove(); clearMark(); suppressUntil = Date.now() + 250;
+        if (!cancel && d.tgt) moveTile(d.id, d.tgt, d.side);
+        render();
+    };
+    window.addEventListener('pointerup', endDrag(false)); window.addEventListener('pointercancel', endDrag(true));
 
     const btn = $('btn-goto-mj'); if (btn) btn.addEventListener('click', () => { playClickSound(); open(); });
     return { open };

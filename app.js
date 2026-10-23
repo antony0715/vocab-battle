@@ -287,6 +287,7 @@ const firebaseConfig = {
 if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const dbRef = firebase.database().ref('leaderboard');            // 生存秒數榜
 const scoreRef = firebase.database().ref('leaderboard_score');   // 分數榜
+
 // 💡 新增：自動監聽分頁切換，切到背景時中斷 Firebase 連線，切回時重新連線
 function manageFirebaseVisibility() {
     document.addEventListener("visibilitychange", () => {
@@ -1298,6 +1299,7 @@ function initMultiplayerRoom(roomCode, isCreating, onReady) {
         showScreen('room');
         displayRoomCode.textContent = `#${roomCode}`;
         listenRoomData();
+        syncRoomAvatar();
         if (typeof onReady === 'function') onReady(roomCode);
     };
 
@@ -1320,6 +1322,14 @@ function initMultiplayerRoom(roomCode, isCreating, onReady) {
     }
 }
 
+// 把自己的頭像縮圖寫進房間，讓房內玩家都看得到
+function syncRoomAvatar() {
+    if (!currentRoomRef || !hasProfile() || !Profile.getThumb) return;
+    const ref = currentRoomRef;
+    Profile.getThumb().then(av => { if (av && ref === currentRoomRef) ref.child('players/' + mySafeKey() + '/avatar').set(av); }).catch(() => { });
+}
+const safeAvatar = a => (typeof a === 'string' && a.startsWith('data:image/jpeg;base64,') && a.length < 20000) ? a : '';
+
 function resetRoundTracking() {
     currentRound = null; endedRoundHandled = null; endRequestedRound = null;
     lastRoomStatus = 'waiting';
@@ -1335,7 +1345,8 @@ function renderRoomPlayers(room) {
         else tag = '<span class="tag-wait">⏳ 稍等一下</span>';
         const item = document.createElement('div');
         item.className = 'room-player';
-        item.innerHTML = `<span class="nm">${esc(p.name || '未知玩家')}${p.name === playerName ? ' (你)' : ''}</span>${tag}`;
+        const nm = p.name || '未知玩家', av = safeAvatar(p.avatar);
+        item.innerHTML = `<span class="nm" style="display:flex;align-items:center;gap:8px;"><span class="avatar" style="width:32px;height:32px;font-size:14px;">${av ? `<img src="${esc(av)}" alt="">` : esc(nm.trim().charAt(0).toUpperCase() || '?')}</span>${esc(nm)}${p.name === playerName ? ' (你)' : ''}</span>${tag}`;
         playerListContainer.appendChild(item);
     });
 }
@@ -1497,7 +1508,7 @@ function renderMultiplayerScoreboard(playersObj, winnerName) {
         item.className = 'mp-row' + (isMe ? ' me' : '') + (isDead && !isWinner ? ' dead' : '') + (isWinner ? ' winner' : '');
         if (isMe) item.id = 'my-multiplayer-row';
         item.innerHTML = `
-            <span class="player-name-tag">${isWinner ? '👑 ' : ''}${esc(player.name)}${isMe ? ' (你)' : ''}</span>
+            <span class="player-name-tag"><span class="avatar" style="width:20px;height:20px;font-size:11px;display:inline-flex;vertical-align:middle;margin-right:5px;">${safeAvatar(player.avatar) ? `<img src="${esc(safeAvatar(player.avatar))}" alt="">` : esc((player.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>${isWinner ? '👑 ' : ''}${esc(player.name)}${isMe ? ' (你)' : ''}</span>
             <div class="hp-bar-outer"><div class="hp-bar-inner ${pct <= 30 ? 'low' : ''}" style="width: ${pct}%;"></div></div>
             <span class="status-badge ${isDead && !isWinner ? 'dead' : ''}">${isDead && !isWinner ? '💀 淘汰' : `HP: ${hp}`}</span>`;
         scoreboardEl.appendChild(item);
@@ -1689,3 +1700,24 @@ function triggerHealEffect(n = 10) { floatText(`+${n}`, 'floating-heal', 'row-fl
             }
         });
     }
+
+// ==================== ⛶ 全螢幕（設定內）====================
+(function () {
+    const btn = $('btn-fullscreen'); if (!btn) return;
+    const de = document.documentElement;
+    const req = de.requestFullscreen || de.webkitRequestFullscreen;
+    const isFs = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+    const refresh = () => { btn.textContent = isFs() ? '⛶ 離開全螢幕' : '⛶ 進入全螢幕'; };
+    btn.onclick = () => {
+        playClickSound();
+        if (!req) { alert('這個瀏覽器不支援全螢幕（iPhone 建議使用「加入主畫面」來獲得全螢幕效果）。'); return; }
+        if (isFs()) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+        else {
+            const p = req.call(de);
+            if (p && p.catch) p.catch(() => alert('無法進入全螢幕，請稍後再試。'));
+        }
+    };
+    document.addEventListener('fullscreenchange', refresh);
+    document.addEventListener('webkitfullscreenchange', refresh);
+    refresh();
+})();

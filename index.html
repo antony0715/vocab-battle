@@ -111,13 +111,20 @@
                     返回主選單</button>
             </div>
             <div id="lobby-footer">
-            <div style="text-align: center; margin-top: 8px;">
-                <button id="btn-about" class="btn-link">關於我們與隱私權說明</button>
-            </div>
-            <div
-                style="text-align: center; font-size: 12px; color: var(--muted); margin-top: 10px; margin-bottom: 5px;">
-                © 2026 Vocab Battle Studio. All rights reserved.
-            </div>
+                <div style="text-align: center; margin-top: 8px;">
+                    <button id="btn-about" class="btn-link">關於我們與隱私權說明</button>
+                </div>
+                <div
+                    style="text-align: center; font-size: 12px; color: var(--muted); margin-top: 10px; margin-bottom: 5px;">
+                    © 2026 Vocab Battle Studio. All rights reserved.
+                </div>
+                <div style="text-align: center; font-size: 11px; color: var(--muted); margin-top: 4px;">
+                    單字庫資料來源：財團法人大學入學考試中心基金會（僅供非營利教育使用）
+                </div>
+                <div style="text-align: center; font-size: 11px; color: var(--muted); margin-top: 4px;">
+                    版權屬原著作者與財團法人大學入學考試中心基金會所有。
+                </div>
+                
 
             </div>
         </div>
@@ -360,8 +367,8 @@
                 <!-- 新增：更新日誌區塊 -->
                 <h4>📢 最近更新 (請往下滑查看基本說明) </h4>
                 <ul>
-                    <li><b>2026/10/24 英文麻將(測試版)</b>：4 人拼字麻將，摸一打一、搶牌、胡牌，請橫放手機遊玩。</li>
-                    <li><b>2026/10/24 更新</b>：排位賽改為 4~5 級字；好友列表顯示頭像；錯題庫可依記憶程度排序，並可自選級別練習；懸浮設定球會記住位置。</li>
+                    <li><b>2026/10/23 英文麻將(暫不開放)</b>：4 人拼字麻將，摸一打一、搶牌、胡牌，請橫放手機遊玩。</li>
+                    <li><b>2026/10/23 更新</b>：排位賽改為 4~5 級字；好友列表顯示頭像；錯題庫可依記憶程度排序，並可自選級別練習；懸浮設定球會記住位置並新增全螢幕。</li>
                     <li><b>2026/10/23 好友系統</b>：大廳「👥 我的好友」可複製自己的專屬玩家代碼、輸入對方代碼加好友，看到好友是否在線、最後上線時間，並能直接邀請好友加入多人房間。</li>
                     <li><b>2026/10/23 單字詳情</b>：在錯題庫點擊單字，可查看加入與複習時間、估算的記憶曲線、建議複習時間，並一鍵前往Google或劍橋辭典。</li>
                     <li><b>2026/10/23 再來一次</b>：單人模式結算畫面新增「 再來一次」。</li>
@@ -415,7 +422,7 @@
             <button id="btn-help-close" class="btn btn-primary" style="width: 100%; margin-top: 12px;">懂到</button>
         </div>
     </div>
-    
+
     <!-- ℹ️ 關於我們與隱私權說明彈窗 -->
     <div id="about-modal" class="modal-overlay hidden">
         <div class="modal-card">
@@ -423,11 +430,12 @@
             <div class="help-content">
                 <h4>關於此網站</h4>
                 <p>「英語單字King」是一款結合生存競賽與個人學習的高中英文單字學習網頁遊戲，旨在透過輕鬆有趣的方式幫助學生練習與複習學測常見單字。</p>
-                
+
                 <h4>隱私權與資料儲存說明</h4>
                 <ul>
                     <li><b>本地儲存 (LocalStorage)</b>：你的個人檔案、頭像、錯題庫、遊戲設定與最高紀錄，皆僅儲存在你當前使用的瀏覽器中，我們不會主動收集或外流你的個人隱私資料。</li>
-                    <li><b>雲端資料庫 (Firebase)</b>：多人遊戲房間與排行榜（生存秒數榜、分數榜）會透過 Google Firebase 進行即時同步，會記錄遊戲暱稱與成績分數；好友功能另會儲存玩家代碼、上線狀態與縮小後的頭像。</li>
+                    <li><b>雲端資料庫 (Firebase)</b>：多人遊戲房間與排行榜（生存秒數榜、分數榜）會透過 Google Firebase
+                        進行即時同步，會記錄遊戲暱稱與成績分數；好友功能另會儲存玩家代碼、上線狀態與縮小後的頭像。</li>
                     <li><b>流量分析</b>：本站使用 Google Analytics (GA4) 來協助分析訪客流量與改善網站效能。</li>
                 </ul>
 
@@ -471,6 +479,7 @@
                 <label class="check-row">
                     <input type="checkbox" id="setting-darkmode"> 啟用深色模式
                 </label>
+                <button id="btn-fullscreen" class="btn btn-secondary">⛶ 進入全螢幕</button>
                 <button id="btn-open-feedback" class="btn btn-secondary">💬 報錯與建議</button>
             </div>
             <button id="btn-settings-close" class="btn btn-primary"
@@ -536,10 +545,10 @@
     <!-- 🏅 成就通知 -->
     <div id="toast-root"></div>
 
-    <script src="app.js?v=7"></script>
+    <script src="app.js?v=8"></script>
     <script src="profile.js?v=3"></script>
     <script src="friends.js?v=2"></script>
-    <script src="mahjong.js?v=1"></script>
+    <script src="mahjong.js?v=4"></script>
 </body>
 
 </html>
