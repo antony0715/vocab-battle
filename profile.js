@@ -157,6 +157,7 @@ const Profile = (() => {
                 c.getContext('2d').drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, 128, 128);
                 data.avatar = c.toDataURL('image/jpeg', 0.85);
                 flush(); render(); check();
+                if (typeof Friends !== 'undefined') Friends.syncName(); // 同步縮圖給好友
             };
             img.onerror = () => alert('無法讀取這張圖片，請換一張試試。');
             img.src = reader.result;
@@ -170,6 +171,20 @@ const Profile = (() => {
         if (typeof Friends !== 'undefined') Friends.syncName();
     }
     const getName = () => data.name;
+    // 64px 小縮圖（約 2KB），上傳給好友看用；原圖不離開這台裝置
+    function getThumb() {
+        return new Promise(res => {
+            if (!data.avatar) return res('');
+            const img = new Image();
+            img.onload = () => {
+                const c = document.createElement('canvas'); c.width = c.height = 64;
+                c.getContext('2d').drawImage(img, 0, 0, 64, 64);
+                res(c.toDataURL('image/jpeg', 0.8));
+            };
+            img.onerror = () => res('');
+            img.src = data.avatar;
+        });
+    }
 
     // ---------- 畫面 ----------
     function refreshChip() {
@@ -222,11 +237,11 @@ const Profile = (() => {
         $('profile-chart').innerHTML = trendChart();
 
         $('profile-levels').innerHTML = ['level4', 'level5', 'level6'].map(l => {
-            const b = s.byLevel[l], n = b.c + b.w, acc = n ? Math.round(b.c / n * 100) : 0;
             const seen = Object.values(data.seen).filter(v => v === l.slice(-1)).length;
             const pool = typeof getVocabByLevels === 'function' ? getVocabByLevels([l]).length : 0;
-            return `<div><div class="lv-bar-top"><span>${LV[l]}　正確率 ${n ? acc + '%' : '—'}（${b.c}/${n}）</span><span>已複習 ${seen}${pool ? ' / ' + pool : ''} 字</span></div>
-                <div class="lv-bar"><div style="width:${acc}%"></div></div></div>`;
+            const pct = pool ? Math.min(100, Math.round(seen / pool * 100)) : 0;
+            return `<div><div class="lv-bar-top"><span>${LV[l]}</span><span>已學習 ${seen}${pool ? ' / ' + pool : ''} 字</span></div>
+                <div class="lv-bar"><div style="width:${pct}%"></div></div></div>`;
         }).join('');
 
         const hist = data.history.slice(-8).reverse();
@@ -288,7 +303,7 @@ const Profile = (() => {
         click('btn-avatar-pick', () => $('avatar-file').click());
         $('profile-avatar').addEventListener('click', () => $('avatar-file').click());
         $('avatar-file').addEventListener('change', e => { handleAvatarFile(e.target.files[0]); e.target.value = ''; });
-        click('btn-avatar-remove', () => { data.avatar = ''; flush(); render(); refreshChip(); });
+        click('btn-avatar-remove', () => { data.avatar = ''; flush(); render(); refreshChip(); if (typeof Friends !== 'undefined') Friends.syncName(); });
         $('profile-name-input').addEventListener('keydown', e => { if (e.key === 'Enter') saveName(); });
         click('btn-profile-reset', () => {
             if (!confirm('確定要清除所有個人紀錄與成就嗎？（暱稱與頭像會保留，錯題庫與排行榜不受影響）')) return;
@@ -309,5 +324,5 @@ const Profile = (() => {
     // app.js 的 DOMContentLoaded 會先呼叫 getName / refreshChip，所以這裡同樣在載入完成後綁定
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind); else bind();
 
-    return { recordAnswer, endSession, bankAdded, bankRemoved, getName, refreshChip, render };
+    return { recordAnswer, endSession, bankAdded, bankRemoved, getName, getThumb, refreshChip, render };
 })();

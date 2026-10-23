@@ -87,6 +87,7 @@ const Friends = (() => {
         meRef.child('online').onDisconnect().set(false);
         meRef.child('lastSeen').onDisconnect().set(TS());
         meRef.update({ name: myName(), online: document.visibilityState !== 'hidden', lastSeen: TS() });
+        syncName();
         clearInterval(heartbeat);
         heartbeat = setInterval(() => {
             if (meRef && document.visibilityState !== 'hidden') meRef.update({ online: true, lastSeen: TS() });
@@ -105,7 +106,13 @@ const Friends = (() => {
         else meRef.update({ online: true, lastSeen: TS() });
     });
 
-    function syncName() { if (meRef) meRef.update({ name: myName() }); }
+    async function syncName() {
+        if (!meRef) return;
+        let av = '';
+        try { if (typeof Profile !== 'undefined') av = await Profile.getThumb(); } catch (e) { }
+        meRef.update({ name: myName(), avatar: av || null });
+    }
+    const safeAvatar = a => (typeof a === 'string' && a.startsWith('data:image/jpeg;base64,') && a.length < 20000) ? a : '';
 
     // ---------- 好友資料監聽 ----------
     function startFriendsListener() {
@@ -159,7 +166,7 @@ const Friends = (() => {
             const d = info[c], st = statusText(d), name = (d && d.name) || c;
             const on = isOnline(d);
             return `<div class="friend-row">
-                <div class="avatar fr-av ${on ? 'on' : ''}">${esc(name.trim().charAt(0).toUpperCase() || '?')}</div>
+                <div class="avatar fr-av ${on ? 'on' : ''}">${safeAvatar(d && d.avatar) ? `<img src="${esc(safeAvatar(d.avatar))}" alt="">` : esc(name.trim().charAt(0).toUpperCase() || '?')}</div>
                 <div class="fr-info">
                     <div class="fr-name">${esc(name)}<span class="fr-code">${esc(c)}</span></div>
                     <div class="fr-status ${st.cls}">${esc(st.text)}</div>

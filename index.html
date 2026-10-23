@@ -46,6 +46,7 @@
             <div id="main-menu-options" class="menu-col">
                 <button id="btn-goto-single" class="btn btn-primary">單人遊戲</button>
                 <button id="btn-goto-multi" class="btn btn-sky">多人遊戲(測試版)</button>
+                <button id="btn-goto-mj" class="btn btn-sky">🀄 英文麻將(暫不開放)</button>
                 <button id="btn-goto-friends" class="btn btn-secondary" style="position: relative;">
                     👥 我的好友 <span id="friends-badge" class="help-red-dot online-dot hidden">0</span>
                 </button>
@@ -69,19 +70,10 @@
                     <div class="lb-empty">載入中...</div>
                 </div>
             </div>
-            <!-- 資訊與版權宣告 -->
-            <div style="text-align: center; margin-top: 8px;">
-                <button id="btn-about" class="btn-link">關於我們與隱私權說明</button>
-            </div>
-            <div
-                style="text-align: center; font-size: 12px; color: var(--muted); margin-top: 10px; margin-bottom: 5px;">
-                © 2026 Vocab Battle Studio. All rights reserved.
-            </div>
-
             <!-- 單人模式子選單 -->
             <div id="single-mode-menu" class="submenu hidden">
                 <button id="btn-start-ranked" class="btn btn-primary">排位賽模式
-                    (4~6級字・計入排行榜)</button>
+                    (4~5級字・計入排行榜)</button>
                 <button id="btn-start-practice" class="btn btn-sky">練習模式
                     (自選題庫・無壓力複習)</button>
                 <button id="btn-back-to-main" class="btn btn-secondary">返回主選單</button>
@@ -95,6 +87,12 @@
                 <label class="check-row"><input type="checkbox" value="level6"> 6 級字</label>
                 <label class="check-row"><input type="checkbox" value="bank"> 📚 我的錯題庫 (<span
                         id="practice-bank-count">0</span> 字)</label>
+                <div id="practice-bank-levels" class="sub-levels hidden">
+                    <span>錯題範圍：</span>
+                    <label><input type="checkbox" data-bl value="level4" checked> 4級</label>
+                    <label><input type="checkbox" data-bl value="level5" checked> 5級</label>
+                    <label><input type="checkbox" data-bl value="level6" checked> 6級</label>
+                </div>
                 <button id="btn-practice-start" class="btn btn-primary">開始練習</button>
                 <button id="btn-practice-back" class="btn btn-secondary">返回</button>
             </div>
@@ -111,6 +109,16 @@
                 </div>
                 <button id="btn-back-from-multi" class="btn btn-secondary" style="margin-top: 10px;">
                     返回主選單</button>
+            </div>
+            <div id="lobby-footer">
+            <div style="text-align: center; margin-top: 8px;">
+                <button id="btn-about" class="btn-link">關於我們與隱私權說明</button>
+            </div>
+            <div
+                style="text-align: center; font-size: 12px; color: var(--muted); margin-top: 10px; margin-bottom: 5px;">
+                © 2026 Vocab Battle Studio. All rights reserved.
+            </div>
+
             </div>
         </div>
 
@@ -188,6 +196,8 @@
                     </div>
                     <button id="btn-play-again" class="btn btn-primary"
                         style="width: 100%; margin-top: 12px; padding: 10px;">🔄 再來一次</button>
+                    <button id="btn-back-bank" class="btn btn-sky"
+                        style="width: 100%; margin-top: 8px; padding: 8px; display: none;">↩ 回到錯題庫</button>
                     <button id="btn-close-review" class="btn btn-secondary"
                         style="width: 100%; margin-top: 8px; padding: 8px;">確定並返回大廳</button>
                 </div>
@@ -325,6 +335,8 @@
                     <option value="time">排序：最近加入</option>
                     <option value="alpha">排序：字首 A–Z（分組）</option>
                     <option value="level">排序：依級數分組</option>
+                    <option value="mem-asc">排序：記憶程度 低→高（遞增）</option>
+                    <option value="mem-desc">排序：記憶程度 高→低（遞減）</option>
                 </select>
                 <input type="text" id="bank-search" placeholder="🔍 搜尋單字或中文...">
             </div>
@@ -348,6 +360,8 @@
                 <!-- 新增：更新日誌區塊 -->
                 <h4>📢 最近更新 (請往下滑查看基本說明) </h4>
                 <ul>
+                    <li><b>2026/10/24 英文麻將(測試版)</b>：4 人拼字麻將，摸一打一、搶牌、胡牌，請橫放手機遊玩。</li>
+                    <li><b>2026/10/24 更新</b>：排位賽改為 4~5 級字；好友列表顯示頭像；錯題庫可依記憶程度排序，並可自選級別練習；懸浮設定球會記住位置。</li>
                     <li><b>2026/10/23 好友系統</b>：大廳「👥 我的好友」可複製自己的專屬玩家代碼、輸入對方代碼加好友，看到好友是否在線、最後上線時間，並能直接邀請好友加入多人房間。</li>
                     <li><b>2026/10/23 單字詳情</b>：在錯題庫點擊單字，可查看加入與複習時間、估算的記憶曲線、建議複習時間，並一鍵前往Google或劍橋辭典。</li>
                     <li><b>2026/10/23 再來一次</b>：單人模式結算畫面新增「 再來一次」。</li>
@@ -360,7 +374,7 @@
                 </ul>
                 <h4>🎮 單人遊戲</h4>
                 <ul>
-                    <li><b>排位賽</b>：4~6 級單字混合出題。血量會持續倒數，答對 +15 血、答錯 -25 血，血量歸零即結束。成績計入排行榜。</li>
+                    <li><b>排位賽</b>：4~5 級單字混合出題。血量會持續倒數，答對 +15 血、答錯 -25 血，血量歸零即結束。成績計入排行榜。</li>
                     <li><b>計分</b>：答對一題 5 分，每一個連擊 (Combo) 讓每題多賺 1%。畫面會即時顯示答對、答錯、總題數與錯誤率。</li>
                     <li><b>練習模式</b>：可複選 4 級、5 級、6 級、我的錯題庫。沒有血量、計時與連擊，想練多久都行，按「立即結算」結束。</li>
                     <li><b>不確定功能</b>：若覺得這個單字不確定 可以先點擊題目，變成黃色代表之後會加入錯題庫，再次點擊以取消</li>
@@ -391,7 +405,7 @@
                 <ul>
                     <li>大廳點擊上方的頭像小卡即可開啟個人檔案；點頭像可上傳圖片（會自動裁成正方形並壓縮）。</li>
                     <li>所有個人紀錄與成就都存在你這台裝置的瀏覽器中，清除瀏覽器資料會一併消失。</li>
-                    <li>頭像目前只會顯示在你自己的畫面，不會上傳到伺服器。</li>
+                    <li>頭像（縮小後的小圖）會同步給你的好友，在好友列表中顯示；原圖仍只存在你的瀏覽器。</li>
                 </ul>
                 <h4>🏆 排行榜</h4>
                 <ul>
@@ -413,7 +427,7 @@
                 <h4>隱私權與資料儲存說明</h4>
                 <ul>
                     <li><b>本地儲存 (LocalStorage)</b>：你的個人檔案、頭像、錯題庫、遊戲設定與最高紀錄，皆僅儲存在你當前使用的瀏覽器中，我們不會主動收集或外流你的個人隱私資料。</li>
-                    <li><b>雲端資料庫 (Firebase)</b>：多人遊戲房間與排行榜（生存秒數榜、分數榜）會透過 Google Firebase 進行即時同步，僅會記錄遊戲暱稱與成績分數。</li>
+                    <li><b>雲端資料庫 (Firebase)</b>：多人遊戲房間與排行榜（生存秒數榜、分數榜）會透過 Google Firebase 進行即時同步，會記錄遊戲暱稱與成績分數；好友功能另會儲存玩家代碼、上線狀態與縮小後的頭像。</li>
                     <li><b>流量分析</b>：本站使用 Google Analytics (GA4) 來協助分析訪客流量與改善網站效能。</li>
                 </ul>
 
@@ -504,15 +518,28 @@
         </div>
     </div>
 
+    <!-- 📖 錯題庫練習範圍 -->
+    <div id="bank-practice-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <h2>📖 選擇練習範圍（可複選）</h2>
+            <div id="bank-practice-opts" class="help-content set-col"></div>
+            <div class="btn-grid">
+                <button id="btn-bp-start" class="btn btn-primary">開始練習</button>
+                <button id="btn-bp-cancel" class="btn btn-secondary">取消</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 📨 收到房間邀請 -->
     <div id="invite-root"></div>
 
     <!-- 🏅 成就通知 -->
     <div id="toast-root"></div>
 
-    <script src="app.js?v=6"></script>
-    <script src="profile.js?v=2"></script>
-    <script src="friends.js?v=1"></script>
+    <script src="app.js?v=7"></script>
+    <script src="profile.js?v=3"></script>
+    <script src="friends.js?v=2"></script>
+    <script src="mahjong.js?v=1"></script>
 </body>
 
 </html>

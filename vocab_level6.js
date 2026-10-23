@@ -2935,7 +2935,7 @@ const level6Vocab = [
     { word: "spectrum", meaning: "光譜、範圍", level: 6 },
     { word: "spendthrift", meaning: "揮霍無度的人", level: 6 },
     { word: "spheroid", meaning: "球狀體", level: 6 },
-    { word: "2spicular", meaning: "針狀的", level: 6 },
+    { word: "spicular", meaning: "針狀的", level: 6 },
     { word: "spinach", meaning: "菠菜", level: 6 },
     { word: "spine", meaning: "脊椎、書脊", level: 6 },
     { word: "spinthariscope", meaning: "閃爍鏡", level: 6 },

@@ -74,6 +74,9 @@ function showMenu(n) {
         el.classList.toggle('hidden', !on);
         el.style.display = on ? 'flex' : 'none';
     });
+    const lb = $('global-leaderboard-card'), ft = $('lobby-footer');
+    if (lb) lb.style.display = n === 'main' ? '' : 'none';
+    if (ft) ft.style.display = n === 'main' ? '' : 'none';
 }
 
 // 安全防護：避免大廳輸入框刪除後其他程式碼讀取 .value 報錯
@@ -284,6 +287,18 @@ const firebaseConfig = {
 if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const dbRef = firebase.database().ref('leaderboard');            // 生存秒數榜
 const scoreRef = firebase.database().ref('leaderboard_score');   // 分數榜
+// 💡 新增：自動監聽分頁切換，切到背景時中斷 Firebase 連線，切回時重新連線
+function manageFirebaseVisibility() {
+    document.addEventListener("visibilitychange", () => {
+        if (document.hidden) {
+            // 玩家切換到別的分頁或最小化，主動斷開資料庫連線
+            firebase.database().goOffline();
+        } else {
+            // 玩家切回遊戲分頁，自動恢復連線
+            firebase.database().goOnline();
+        }
+    });
+}
 
 function getVocabByLevels(levels) {
     const src = {
@@ -291,10 +306,19 @@ function getVocabByLevels(levels) {
         level5: typeof level5Vocab !== 'undefined' ? level5Vocab : [],
         level6: typeof level6Vocab !== 'undefined' ? level6Vocab : []
     };
-    let out = [];
-    levels.forEach(l => {
-        if (Array.isArray(src[l])) out = out.concat(src[l].map(v => ({ word: v.word, meaning: v.meaning, level: l })));
+    // 依 4→5→6 順序去重：同一個字只算在最低的級別，並略過空白字
+    const seen = new Set(), byLevel = {};
+    ['level4', 'level5', 'level6'].forEach(l => {
+        byLevel[l] = [];
+        (Array.isArray(src[l]) ? src[l] : []).forEach(v => {
+            const k = String(v.word || '').trim().toLowerCase();
+            if (!k || seen.has(k)) return;
+            seen.add(k);
+            byLevel[l].push({ word: v.word, meaning: v.meaning, level: l });
+        });
     });
+    let out = [];
+    levels.forEach(l => { if (byLevel[l]) out = out.concat(byLevel[l]); });
     return out;
 }
 
@@ -376,6 +400,11 @@ function renderBank() {
 
     if (bankSort === 'alpha') items.sort((a, b) => a.word.localeCompare(b.word));
     else if (bankSort === 'level') items.sort((a, b) => a.level.localeCompare(b.level) || a.word.localeCompare(b.word));
+    else if (bankSort === 'mem-asc' || bankSort === 'mem-desc') {
+        const m = new Map(items.map(w => [w, memoryModel(w).retNow]));
+        const dir = bankSort === 'mem-asc' ? 1 : -1;
+        items.sort((x, y) => dir * (m.get(x) - m.get(y)) || x.word.localeCompare(y.word));
+    }
     else items.sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
 
     if (!items.length) {
@@ -569,12 +598,38 @@ $('btn-bank-clear').onclick = () => {
     if (!wrongBank.length) return;
     if (confirm('確定要清空整個錯題庫嗎？此動作無法復原。')) { wrongBank = []; saveBank(); renderBank(); }
 };
+let practiceOrigin = ''; // '' | 'menu' | 'bank'
+const bpModal = $('bank-practice-modal');
 $('btn-bank-practice').onclick = () => {
     playClickSound();
     if (!wrongBank.length) { alert('錯題庫還是空的，先去玩幾局吧！'); return; }
-    practicePool = wrongBank.map(w => ({ word: w.word, meaning: w.meaning, level: w.level }));
+    const cnt = l => wrongBank.filter(w => w.level === l).length;
+    $('bank-practice-opts').innerHTML =
+        `<label class="check-row"><input type="checkbox" id="bp-all" checked> 全部 (${wrongBank.length} 字)</label>` +
+        ['level4', 'level5', 'level6'].map(l => `<label class="check-row"><input type="checkbox" class="bp-lv" value="${l}" ${cnt(l) ? 'checked' : 'disabled'}> ${LEVEL_LABEL[l]}錯題字 (${cnt(l)} 字)</label>`).join('');
+    bpModal.classList.remove('hidden');
+};
+bpModal.addEventListener('change', e => {
+    const lv = [...bpModal.querySelectorAll('.bp-lv:not(:disabled)')];
+    if (e.target.id === 'bp-all') lv.forEach(c => c.checked = e.target.checked);
+    else $('bp-all').checked = lv.every(c => c.checked);
+});
+$('btn-bp-cancel').onclick = () => { playClickSound(); bpModal.classList.add('hidden'); };
+$('btn-bp-start').onclick = () => {
+    playClickSound();
+    const lv = [...bpModal.querySelectorAll('.bp-lv:checked')].map(c => c.value);
+    if (!lv.length) { alert('請至少選擇一個級別！'); return; }
+    practicePool = wrongBank.filter(w => lv.includes(w.level)).map(w => ({ word: w.word, meaning: w.meaning, level: w.level }));
+    if (!practicePool.length) { alert('這些級別沒有錯題字！'); return; }
+    bpModal.classList.add('hidden');
+    practiceOrigin = 'bank';
     currentMode = 'practice';
     launchSingleGame();
+};
+$('btn-back-bank').onclick = () => {
+    playClickSound();
+    returnToLobby('main');
+    showScreen('bank'); renderBank();
 };
 
 // ==================== 3. 排行榜 (秒數 / 分數) ====================
@@ -714,6 +769,8 @@ function renderWrongWordsReview(summaryHtml) {
         wrongQuestionsList.forEach(item => wrongWordsListEl.appendChild(createReviewCard(item)));
         updateAddAllBtn();
     }
+    const bb = $('btn-back-bank');
+    if (bb) bb.style.display = (currentMode === 'practice' && practiceOrigin === 'bank') ? '' : 'none';
     if (btnPlayAgain) btnPlayAgain.style.display = currentMode === 'multi' ? 'none' : '';
     btnCloseReview.textContent = currentMode === 'multi' ? '🚪 返回房間大廳' : currentMode === 'practice' ? '返回主選單' : '確定並返回大廳';
     wrongWordsContainer.classList.remove('hidden');
@@ -738,15 +795,13 @@ btnCloseReview.onclick = () => {
 
 // 點擊題目單字：標記為不熟
 window.addEventListener('DOMContentLoaded', () => {
+    // 💡 啟用分頁可見性監聽 (自動斷連 / 重連)
+    manageFirebaseVisibility();
     // 初始化時套用儲存的深色模式
     applyDarkMode(gameSettings.darkMode);
     if (hasProfile()) { const pn = Profile.getName(); if (pn) setPlayerName(pn); Profile.refreshChip(); }
     // ⚙️ 懸浮設定球事件與拖曳吸附綁定
     const floatBtn = $('btn-floating-settings');
-    let isDragging = false;
-    let hasMoved = false;
-    let startX = 0, startY = 0;
-    let initialX = 0, initialY = 0;
 
     // 初始化勾選框狀態
     $('setting-speech').checked = gameSettings.speech;
@@ -757,95 +812,74 @@ window.addEventListener('DOMContentLoaded', () => {
         const curVolPercent = Math.round((gameSettings.volume !== undefined ? gameSettings.volume : 1.0) * 100);
         volInput.value = curVolPercent;
         volText.textContent = curVolPercent;
-        volInput.oninput = () => {
-            volText.textContent = volInput.value;
-        };
+        volInput.oninput = () => { volText.textContent = volInput.value; };
     }
 
-    const onPointerDown = e => {
-        isDragging = true;
-        hasMoved = false;
+    // ---- 懸浮球位置：預設在螢幕左側，並記住玩家最後放的位置 ----
+    const POS_KEY = 'vocab_float_pos', FM = 10;
+    const clampY = y => Math.max(FM, Math.min(window.innerHeight - floatBtn.offsetHeight - FM, y));
+    const placeFloat = () => {
+        let pos = null;
+        try { pos = JSON.parse(localStorage.getItem(POS_KEY)); } catch (e) { }
+        const right = pos && pos.side === 'right';
+        const yr = pos && typeof pos.y === 'number' ? pos.y : 0.55;
+        floatBtn.style.right = 'auto'; floatBtn.style.bottom = 'auto';
+        floatBtn.style.left = (right ? window.innerWidth - floatBtn.offsetWidth - FM : FM) + 'px';
+        floatBtn.style.top = clampY(yr * window.innerHeight) + 'px';
+    };
+    placeFloat();
+    window.addEventListener('resize', placeFloat);
+
+    // ---- 拖曳（Pointer Events：滑鼠與觸控只走一條路，不會重複觸發）----
+    let drag = null, suppressClick = false, settingsOpenedAt = 0;
+    floatBtn.addEventListener('pointerdown', e => {
+        const r = floatBtn.getBoundingClientRect();
+        drag = { id: e.pointerId, sx: e.clientX, sy: e.clientY, ox: r.left, oy: r.top, moved: false };
+        try { floatBtn.setPointerCapture(e.pointerId); } catch (_) { }
+    });
+    floatBtn.addEventListener('pointermove', e => {
+        if (!drag || e.pointerId !== drag.id) return;
+        const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
+        if (!drag.moved && Math.hypot(dx, dy) < 10) return;
+        drag.moved = true;
         floatBtn.classList.add('dragging');
-        startX = e.clientX || e.touches[0].clientX;
-        startY = e.clientY || e.touches[0].clientY;
-        const rect = floatBtn.getBoundingClientRect();
-        initialX = rect.left;
-        initialY = rect.top;
-        floatBtn.style.right = 'auto';
-        floatBtn.style.left = `${initialX}px`;
-        floatBtn.style.top = `${initialY}px`;
-    };
-
-    const onPointerMove = e => {
-        if (!isDragging) return;
-        const clientX = e.clientX || e.touches[0].clientX;
-        const clientY = e.clientY || e.touches[0].clientY;
-        const dx = clientX - startX;
-        const dy = clientY - startY;
-
-        if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
-            hasMoved = true;
-        }
-
-        let newX = initialX + dx;
-        let newY = initialY + dy;
-
-        const maxX = window.innerWidth - floatBtn.offsetWidth;
-        const maxY = window.innerHeight - floatBtn.offsetHeight;
-        newX = Math.max(10, Math.min(maxX - 10, newX));
-        newY = Math.max(10, Math.min(maxY - 10, newY));
-
-        floatBtn.style.left = `${newX}px`;
-        floatBtn.style.top = `${newY}px`;
-    };
-
-    const onPointerUp = () => {
-        if (!isDragging) return;
-        isDragging = false;
+        floatBtn.style.left = Math.max(FM, Math.min(window.innerWidth - floatBtn.offsetWidth - FM, drag.ox + dx)) + 'px';
+        floatBtn.style.top = clampY(drag.oy + dy) + 'px';
+    });
+    const endDrag = e => {
+        if (!drag || e.pointerId !== drag.id) return;
+        const moved = drag.moved; drag = null;
         floatBtn.classList.remove('dragging');
-
-        // 1. 如果沒有移動，視為點擊「打開設定彈窗」
-        if (!hasMoved) {
-            playClickSound();
-            $('setting-darkmode').checked = !!gameSettings.darkMode;
-            $('setting-speech').checked = gameSettings.speech;
-            $('setting-sound').checked = gameSettings.sound;
-            // 👈 每次打開設定時重新載入聲線選單，解決一開始空白的問題
-            populateVoiceList();
-
-            const voiceSelect = $('setting-speech-voice');
-            if (voiceSelect) {
-                populateVoiceList();
-                voiceSelect.value = gameSettings.voiceURI || '';
-            }
-            if (volInput && volText) {
-                const p = Math.round((gameSettings.volume !== undefined ? gameSettings.volume : 1.0) * 100);
-                volInput.value = p;
-                volText.textContent = p;
-            }
-            $('settings-modal').classList.remove('hidden');
-            return; // 打開設定後就直接結束，不需要做後續的吸附
-        }
-
-        // 2. 如果有移動（拖曳放開），則自動吸附到左右邊緣
-        const rect = floatBtn.getBoundingClientRect();
-        const midX = window.innerWidth / 2;
-        if (rect.left + rect.width / 2 < midX) {
-            floatBtn.style.left = '10px';
-        } else {
-            // 修正原本漏掉的減號
-            floatBtn.style.left = `${window.innerWidth - floatBtn.offsetWidth - 10}px`;
-        }
+        if (!moved) return;
+        suppressClick = true; setTimeout(() => suppressClick = false, 80);
+        const r = floatBtn.getBoundingClientRect();
+        const side = r.left + r.width / 2 < window.innerWidth / 2 ? 'left' : 'right';
+        try { localStorage.setItem(POS_KEY, JSON.stringify({ side, y: r.top / window.innerHeight })); } catch (_) { }
+        placeFloat(); // 吸附到左／右邊緣
     };
+    floatBtn.addEventListener('pointerup', endDrag);
+    floatBtn.addEventListener('pointercancel', endDrag);
 
-    // 事件監聽綁定
-    floatBtn.addEventListener('mousedown', onPointerDown);
-    window.addEventListener('mousemove', onPointerMove);
-    window.addEventListener('mouseup', onPointerUp);
-
-    floatBtn.addEventListener('touchstart', onPointerDown, { passive: true });
-    window.addEventListener('touchmove', onPointerMove, { passive: true });
-    window.addEventListener('touchend', onPointerUp);
+    // ---- 開啟設定：改用 click 事件（不是 pointerup），並在剛開啟的 0.5 秒內擋掉彈窗內的點擊，避免誤觸裡面的按鈕 ----
+    floatBtn.addEventListener('click', () => {
+        if (suppressClick || !$('settings-modal').classList.contains('hidden')) return;
+        playClickSound();
+        $('setting-darkmode').checked = !!gameSettings.darkMode;
+        $('setting-speech').checked = gameSettings.speech;
+        $('setting-sound').checked = gameSettings.sound;
+        populateVoiceList();
+        const voiceSelect = $('setting-speech-voice');
+        if (voiceSelect) voiceSelect.value = gameSettings.voiceURI || '';
+        if (volInput && volText) {
+            const p = Math.round((gameSettings.volume !== undefined ? gameSettings.volume : 1.0) * 100);
+            volInput.value = p; volText.textContent = p;
+        }
+        settingsOpenedAt = Date.now();
+        $('settings-modal').classList.remove('hidden');
+    });
+    $('settings-modal').addEventListener('click', e => {
+        if (Date.now() - settingsOpenedAt < 500) { e.stopImmediatePropagation(); e.preventDefault(); }
+    }, true);
 
     // 點擊關閉並儲存設定
     $('btn-settings-close').onclick = () => {
@@ -996,8 +1030,9 @@ function startBattleGame() {
     sessionRecorded = false; sessionStart = Date.now(); sessionMaxCombo = 0;
 
     if (allVocabPool.length === 0) initVocabPool();
-    activePool = practice ? practicePool : allVocabPool;
-    distractPool = allVocabPool;
+    const rankedPool = getVocabByLevels(['level4', 'level5']); // 排位賽：只出 4、5 級字
+    activePool = practice ? practicePool : (rankedPool.length >= 4 ? rankedPool : allVocabPool);
+    distractPool = practice ? allVocabPool : activePool;
 
     configureBattleUI(practice ? 'practice' : 'ranked');
     scoreboardEl.innerHTML = '';
@@ -1159,7 +1194,7 @@ $('btn-back-from-multi').onclick = () => {
     if(globalLeaderboardCard) globalLeaderboardCard.style.display = 'block'; // 返回主頁時顯示排行榜
 };
 $('btn-goto-bank').onclick = () => { playClickSound(); showScreen('bank'); renderBank(); };
-$('btn-start-ranked').onclick = () => { playClickSound(); currentMode = 'ranked'; launchSingleGame(); };
+$('btn-start-ranked').onclick = () => { playClickSound(); currentMode = 'ranked'; practiceOrigin = ''; launchSingleGame(); };
 $('btn-start-practice').onclick = () => {
     playClickSound();
     $('practice-bank-count').textContent = wrongBank.length;
@@ -1168,19 +1203,27 @@ $('btn-start-practice').onclick = () => {
 $('btn-practice-back').onclick = () => { playClickSound(); showMenu('single'); };
 $('btn-practice-start').onclick = () => {
     playClickSound();
-    const picks = [...document.querySelectorAll('#practice-setup-box input:checked')].map(i => i.value);
+    const picks = [...document.querySelectorAll('#practice-setup-box input[value]:not([data-bl]):checked')].map(i => i.value);
     if (!picks.length) { alert('請至少選擇一個題庫！'); return; }
     let pool = getVocabByLevels(picks.filter(p => p !== 'bank'));
-    if (picks.includes('bank')) wrongBank.forEach(w => pool.push({ word: w.word, meaning: w.meaning, level: w.level }));
+    if (picks.includes('bank')) {
+        const bl = [...document.querySelectorAll('#practice-bank-levels input:checked')].map(i => i.value);
+        if (!bl.length) { alert('請至少選擇一個錯題庫級別！'); return; }
+        wrongBank.filter(w => bl.includes(w.level)).forEach(w => pool.push({ word: w.word, meaning: w.meaning, level: w.level }));
+    }
     const seen = new Set();
     pool = pool.filter(w => !seen.has(w.word) && seen.add(w.word));
     if (!pool.length) { alert('你選擇的題庫目前沒有單字（錯題庫可能還是空的）！'); return; }
     practicePool = pool;
+    practiceOrigin = 'menu';
     currentMode = 'practice';
     launchSingleGame();
 };
+document.querySelector('#practice-setup-box input[value="bank"]').addEventListener('change', e => {
+    $('practice-bank-levels').classList.toggle('hidden', !e.target.checked);
+});
 // 💡 請在此定義你當前「最新的使用說明內容版本號」（每次更新使用說明時，只要把版號改大即可）
-const CURRENT_HELP_VERSION = '20261023_v1';
+const CURRENT_HELP_VERSION = '20261024_v1';
 
 // 檢查並更新紅點顯示狀態
 function checkHelpBadge() {
