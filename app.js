@@ -1,4 +1,4 @@
-// ==================== 英語單字King app.js (v4) ====================
+// ==================== 英語單字King app.js (v5) ====================
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const safeKey = n => String(n).replace(/[.#$\[\]\/]/g, '_');
@@ -7,6 +7,22 @@ const LEVEL_LABEL = { level4: '4級', level5: '5級', level6: '6級' };
 const MANUAL_MARK = '手動標記不熟';
 
 // ---------- 狀態 ----------
+// 讀取設定LocalStorage
+let gameSettings = JSON.parse(localStorage.getItem('vocab_game_settings')) || {
+    speech: true,
+    sound: true,
+    volume: 1.0,
+    voiceURI: '', // 空字串 = 自動使用 David（找不到則用英文預設聲線）
+    darkMode: false // 預設關閉深色模式
+};
+
+function saveGameSettings() {
+    localStorage.setItem('vocab_game_settings', JSON.stringify(gameSettings));
+}
+// 👈 加上這段切換深色模式的函式
+function applyDarkMode(isDark) {
+    document.body.classList.toggle('dark-mode', isDark);
+}
 let playerName = "訪客";
 let myHp = 100, myCombo = 0;
 let currentQuestion = null;
@@ -23,9 +39,29 @@ let isCurrentQuestionMarked = false, markAddedNew = false;
 let lastSummaryHtml = '';
 let lbTab = 'time';
 const lbData = { time: [], score: [] };
+let sessionRecorded = false, sessionStart = 0, sessionMaxCombo = 0; // 個人檔案紀錄用
+let scoreboardFrozen = false, lastPlayersSnapshot = null;           // 多人結算後凍結計分板
+const hasProfile = () => typeof Profile !== 'undefined';
+function setPlayerName(n) {
+    playerName = n;
+    if (typeof playerNameInput !== 'undefined' && playerNameInput) {
+        playerNameInput.value = n;
+    }
+}
+function recordSession(mode, won = false) {
+    if (sessionRecorded) return;
+    sessionRecorded = true;
+    if (!hasProfile()) return;
+    Profile.endSession({
+        mode, correct: correctCount, wrong: wrongCount, won,
+        score: Math.round(score * 10) / 10,
+        secs: mode === 'ranked' ? survivalSeconds : Math.round((Date.now() - sessionStart) / 1000),
+        maxCombo: sessionMaxCombo
+    });
+}
 
 // ---------- DOM ----------
-const screens = { lobby: $('lobby-screen'), room: $('room-screen'), battle: $('battle-screen'), bank: $('bank-screen') };
+const screens = { lobby: $('lobby-screen'), room: $('room-screen'), battle: $('battle-screen'), bank: $('bank-screen'), profile: $('profile-screen') };
 function showScreen(n) { Object.entries(screens).forEach(([k, el]) => el && el.classList.toggle('hidden', k !== n)); }
 
 const mainMenuOptions = $('main-menu-options'), singleModeMenu = $('single-mode-menu');
@@ -40,7 +76,12 @@ function showMenu(n) {
     });
 }
 
-const playerNameInput = $('player-name'), roomCodeInput = $('room-code-input');
+// 安全防護：避免大廳輸入框刪除後其他程式碼讀取 .value 報錯
+const roomCodeInput = $('room-code-input');
+const playerNameInput = {
+    get value() { return (typeof Profile !== 'undefined' && Profile.getName()) ? Profile.getName() : playerName; },
+    set value(v) { playerName = v; }
+};
 const displayRoomCode = $('display-room-code'), playerListContainer = $('player-list');
 const btnCreateRoom = $('btn-create-room'), btnJoinRoom = $('btn-join-room');
 const btnStartGame = $('btn-start-game'), btnLeaveRoom = $('btn-leave-room'), btnToggleReady = $('btn-toggle-ready');
@@ -64,9 +105,72 @@ function initAudio() {
         audioCtx.resume();
     }
 }
+// 英文單字語音朗讀函式
+let availableVoices = [];
 
+// 決定要用的聲線：使用者選的 → David → 其他美式英文 → 系統預設
+function resolveVoice() {
+    if (!availableVoices.length && 'speechSynthesis' in window) availableVoices = window.speechSynthesis.getVoices();
+    let v = gameSettings.voiceURI && availableVoices.find(x => x.voiceURI === gameSettings.voiceURI);
+    if (!v) v = availableVoices.find(x => /david/i.test(x.name) && x.lang.toLowerCase().startsWith('en'));
+    if (!v) v = availableVoices.find(x => x.lang === 'en-US') || null;
+    return v;
+}
+
+function speakWord(word) {
+    if (!gameSettings.speech) return;
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(word);
+        utterance.lang = 'en-US';
+        utterance.rate = 1.0;
+        utterance.volume = typeof gameSettings.volume === 'number' ? gameSettings.volume : 1.0;
+        const voice = resolveVoice();
+        if (voice) utterance.voice = voice;
+        window.speechSynthesis.speak(utterance);
+    }
+}
+
+function populateVoiceList() {
+    if (!('speechSynthesis' in window)) return;
+    availableVoices = window.speechSynthesis.getVoices();
+    const voiceSelect = $('setting-speech-voice');
+    if (!voiceSelect) return;
+
+    voiceSelect.innerHTML = '<option value="">預設 </option>';
+    availableVoices.forEach(voice => {
+        if (!voice.lang.toLowerCase().startsWith('en')) return;
+        const opt = document.createElement('option');
+        opt.value = voice.voiceURI;
+        const cleanName = voice.name
+            .replace(/ - English \(United States\)/gi, ' (美)')
+            .replace(/ - English \(United Kingdom\)/gi, ' (英)')
+            .replace(/English \(United States\)/gi, '美式')
+            .replace(/English \(United Kingdom\)/gi, '英式');
+        const n = voice.name.toLowerCase();
+        let prefix = '◎ ';
+        if (/female|zira|aria|jenny|susan|catherine|hazel/.test(n)) prefix = '女: ';
+        else if (/male|david|mark|george/.test(n)) prefix = '男: ';
+        opt.textContent = prefix + cleanName;
+        voiceSelect.appendChild(opt);
+    });
+
+    // 已存的聲線若已不存在（例如舊版存的 'Microsoft David'），視為未設定
+    if (gameSettings.voiceURI && !availableVoices.some(v => v.voiceURI === gameSettings.voiceURI)) {
+        gameSettings.voiceURI = '';
+        saveGameSettings();
+    }
+    const cur = resolveVoice();
+    voiceSelect.value = gameSettings.voiceURI || (cur ? cur.voiceURI : '');
+}
+
+if ('speechSynthesis' in window) {
+    populateVoiceList();
+    window.speechSynthesis.onvoiceschanged = populateVoiceList;
+}
 // 答對音效
 function playCorrectSound() {
+    if (!gameSettings.sound) return;
     try {
         initAudio();
         const now = audioCtx.currentTime;
@@ -90,6 +194,7 @@ function playCorrectSound() {
 
 // 答錯音效
 function playWrongSound() {
+    if (!gameSettings.sound) return;
     try {
         initAudio();
         const now = audioCtx.currentTime;
@@ -113,6 +218,7 @@ function playWrongSound() {
 
 // 按鈕點擊音效
 function playClickSound() {
+    if (!gameSettings.sound) return;
     try {
         initAudio();
         const now = audioCtx.currentTime;
@@ -135,6 +241,7 @@ function playClickSound() {
 
 // 緊張背景音樂 (節奏動態加快)
 function startBGM() {
+    if (!gameSettings.sound) return;
     initAudio();
     stopBGM();
     let beat = 0;
@@ -242,9 +349,10 @@ function addToBank(item) {
     if (isInBank(item.word)) return false;
     wrongBank.push({ word: item.word, meaning: item.correctMeaning, level: item.level || 'level4', addedAt: Date.now() });
     saveBank();
+    if (hasProfile()) Profile.bankAdded();
     return true;
 }
-function removeFromBank(word) { wrongBank = wrongBank.filter(w => w.word !== word); saveBank(); }
+function removeFromBank(word) { wrongBank = wrongBank.filter(w => w.word !== word); saveBank(); if (hasProfile()) Profile.bankRemoved(); }
 
 let bankFilter = 'all', bankSort = 'time', bankSearch = '';
 function renderBank() {
@@ -272,7 +380,8 @@ function renderBank() {
         else if (bankSort === 'level') g = LEVEL_LABEL[w.level] || w.level;
         if (g !== null && g !== lastGroup) { html += `<div class="bank-group">${esc(g)}</div>`; lastGroup = g; }
         html += `<div class="bank-row">
-            <div><div class="bank-word">${esc(w.word)}<span class="lv-badge">${esc(LEVEL_LABEL[w.level] || '')}</span></div>
+            <div><div class="bank-word">${esc(w.word)}<span class="lv-badge">${esc(LEVEL_LABEL[w.level] || '')}</span>
+            <button class="bank-speak-btn" data-word="${esc(w.word)}" style="background:none; border:none; cursor:pointer; font-size:14px; margin-left:4px;" title="聽發音">🔊</button></div>
             <div class="bank-meaning">${esc(w.meaning)}</div></div>
             <button class="bank-remove" data-word="${esc(w.word)}">✓ 我會了</button></div>`;
     });
@@ -280,6 +389,15 @@ function renderBank() {
 }
 
 $('bank-list').addEventListener('click', e => {
+
+    // 攔截點擊發音按鈕
+    const speakBtn = e.target.closest('.bank-speak-btn');
+    if (speakBtn) {
+        playClickSound();
+        speakWord(speakBtn.dataset.word);
+        return;
+    }
+
     const b = e.target.closest('.bank-remove');
     if (!b) return;
     playClickSound();
@@ -315,14 +433,13 @@ function renderLeaderboard() {
     const list = lbData[lbTab];
     const unit = lbTab === 'time' ? '秒' : '分';
     if (!list || !list.length) {
-        el.innerHTML = '<div style="text-align: center; padding: 8px 0; color: #94a3b8;">載入中...</div>';
+        el.innerHTML = '<div class="lb-empty">載入中...</div>';
         return;
     }
     el.innerHTML = list.map((item, i) => {
         const badge = i === 0 ? '🥇 1.' : i === 1 ? '🥈 2.' : i === 2 ? '🥉 3.' : `${i + 1}.`;
-        return `<div style="display: flex; justify-content: space-between; padding: 4px 0; ${i < list.length - 1 ? 'border-bottom: 1px dashed #f1f5f9;' : ''}">
-            <span>${badge} ${esc(item.name || '匿名玩家')}</span>
-            <span style="font-weight: bold; color: #16a34a;">${item.score || 0} ${unit}</span></div>`;
+        return `<div class="lb-row"><span>${badge} ${esc(item.name || '匿名玩家')}</span>
+            <span class="lb-score">${item.score || 0} ${unit}</span></div>`;
     }).join('');
 }
 
@@ -377,9 +494,9 @@ function createReviewCard(item) {
     wrap.innerHTML = `<div class="swipe-bg">➕ 加入錯題庫</div>
         <div class="swipe-card">
             <div>
-                <div style="font-weight: bold; color: #0f172a; font-size: 15px;">${esc(item.word)}</div>
-                <div style="color: #22c55e; margin-top: 2px;">正解：${esc(item.correctMeaning)}</div>
-                <div style="color: #94a3b8; font-size: 12px;">誤選：${esc(item.userChosenMeaning)}</div>
+                <div class="rv-word">${esc(item.word)}</div>
+                <div class="rv-correct">正解：${esc(item.correctMeaning)}</div>
+                <div class="rv-wrong">誤選：${esc(item.userChosenMeaning)}</div>
             </div>
             <button class="mini-add-btn"></button>
         </div>`;
@@ -435,7 +552,7 @@ function renderWrongWordsReview(summaryHtml) {
     $('review-hint').style.display = has ? '' : 'none';
     btnAddAllWrong.style.display = has ? '' : 'none';
     if (!has) {
-        wrongWordsListEl.innerHTML = '<div style="color: #22c55e; font-weight: bold; text-align: center;">太厲害了！本局完全沒有錯題！</div>';
+        wrongWordsListEl.innerHTML = '<div class="rv-perfect">太厲害了！本局完全沒有錯題！</div>';
     } else {
         wrongQuestionsList.forEach(item => wrongWordsListEl.appendChild(createReviewCard(item)));
         updateAddAllBtn();
@@ -457,9 +574,166 @@ btnCloseReview.onclick = () => {
 
 // 點擊題目單字：標記為不熟
 window.addEventListener('DOMContentLoaded', () => {
+    // 初始化時套用儲存的深色模式
+    applyDarkMode(gameSettings.darkMode);
+    if (hasProfile()) { const pn = Profile.getName(); if (pn) setPlayerName(pn); Profile.refreshChip(); }
+    // ⚙️ 懸浮設定球事件與拖曳吸附綁定
+    const floatBtn = $('btn-floating-settings');
+    let isDragging = false;
+    let hasMoved = false;
+    let startX = 0, startY = 0;
+    let initialX = 0, initialY = 0;
+
+    // 初始化勾選框狀態
+    $('setting-speech').checked = gameSettings.speech;
+    $('setting-sound').checked = gameSettings.sound;
+    const volInput = $('setting-speech-volume');
+    const volText = $('volume-val');
+    if (volInput && volText) {
+        const curVolPercent = Math.round((gameSettings.volume !== undefined ? gameSettings.volume : 1.0) * 100);
+        volInput.value = curVolPercent;
+        volText.textContent = curVolPercent;
+        volInput.oninput = () => {
+            volText.textContent = volInput.value;
+        };
+    }
+
+    const onPointerDown = e => {
+        isDragging = true;
+        hasMoved = false;
+        floatBtn.classList.add('dragging');
+        startX = e.clientX || e.touches[0].clientX;
+        startY = e.clientY || e.touches[0].clientY;
+        const rect = floatBtn.getBoundingClientRect();
+        initialX = rect.left;
+        initialY = rect.top;
+        floatBtn.style.right = 'auto';
+        floatBtn.style.left = `${initialX}px`;
+        floatBtn.style.top = `${initialY}px`;
+    };
+
+    const onPointerMove = e => {
+        if (!isDragging) return;
+        const clientX = e.clientX || e.touches[0].clientX;
+        const clientY = e.clientY || e.touches[0].clientY;
+        const dx = clientX - startX;
+        const dy = clientY - startY;
+
+        if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
+            hasMoved = true;
+        }
+
+        let newX = initialX + dx;
+        let newY = initialY + dy;
+
+        const maxX = window.innerWidth - floatBtn.offsetWidth;
+        const maxY = window.innerHeight - floatBtn.offsetHeight;
+        newX = Math.max(10, Math.min(maxX - 10, newX));
+        newY = Math.max(10, Math.min(maxY - 10, newY));
+
+        floatBtn.style.left = `${newX}px`;
+        floatBtn.style.top = `${newY}px`;
+    };
+
+    const onPointerUp = () => {
+        if (!isDragging) return;
+        isDragging = false;
+        floatBtn.classList.remove('dragging');
+
+        // 1. 如果沒有移動，視為點擊「打開設定彈窗」
+        if (!hasMoved) {
+            playClickSound();
+            $('setting-darkmode').checked = !!gameSettings.darkMode;
+            $('setting-speech').checked = gameSettings.speech;
+            $('setting-sound').checked = gameSettings.sound;
+            // 👈 每次打開設定時重新載入聲線選單，解決一開始空白的問題
+            populateVoiceList();
+
+            const voiceSelect = $('setting-speech-voice');
+            if (voiceSelect) {
+                populateVoiceList();
+                voiceSelect.value = gameSettings.voiceURI || '';
+            }
+            if (volInput && volText) {
+                const p = Math.round((gameSettings.volume !== undefined ? gameSettings.volume : 1.0) * 100);
+                volInput.value = p;
+                volText.textContent = p;
+            }
+            $('settings-modal').classList.remove('hidden');
+            return; // 打開設定後就直接結束，不需要做後續的吸附
+        }
+
+        // 2. 如果有移動（拖曳放開），則自動吸附到左右邊緣
+        const rect = floatBtn.getBoundingClientRect();
+        const midX = window.innerWidth / 2;
+        if (rect.left + rect.width / 2 < midX) {
+            floatBtn.style.left = '10px';
+        } else {
+            // 修正原本漏掉的減號
+            floatBtn.style.left = `${window.innerWidth - floatBtn.offsetWidth - 10}px`;
+        }
+    };
+
+    // 事件監聽綁定
+    floatBtn.addEventListener('mousedown', onPointerDown);
+    window.addEventListener('mousemove', onPointerMove);
+    window.addEventListener('mouseup', onPointerUp);
+
+    floatBtn.addEventListener('touchstart', onPointerDown, { passive: true });
+    window.addEventListener('touchmove', onPointerMove, { passive: true });
+    window.addEventListener('touchend', onPointerUp);
+
+    // 點擊關閉並儲存設定
+    $('btn-settings-close').onclick = () => {
+        gameSettings.darkMode = $('setting-darkmode').checked;
+        applyDarkMode(gameSettings.darkMode); // 即時套用
+        gameSettings.speech = $('setting-speech').checked;
+        gameSettings.sound = $('setting-sound').checked;
+        const voiceSelect = $('setting-speech-voice');
+        if (voiceSelect) {
+            gameSettings.voiceURI = voiceSelect.value;
+        }
+        if (volInput) {
+            gameSettings.volume = Number(volInput.value) / 100; // 將 0~100 轉為 0.0~1.0
+        }
+        saveGameSettings();
+
+        if (!gameSettings.sound) {
+            stopBGM();
+        }
+
+        $('settings-modal').classList.add('hidden');
+    };
+
+    // 點擊背景遮罩關閉並儲存設定
+    $('settings-modal').addEventListener('click', e => {
+        if (e.target.id === 'settings-modal') {
+            gameSettings.speech = $('setting-speech').checked;
+            gameSettings.sound = $('setting-sound').checked;
+
+            // 1. 聲線與音量
+            const voiceSelect = $('setting-speech-voice');
+            if (voiceSelect) gameSettings.voiceURI = voiceSelect.value;
+            if (volInput) gameSettings.volume = Number(volInput.value) / 100;
+
+            // 2. 深色模式
+            gameSettings.darkMode = $('setting-darkmode').checked;
+            applyDarkMode(gameSettings.darkMode); // 👈 即時套用深色模式
+
+            saveGameSettings();
+
+            if (!gameSettings.sound) {
+                stopBGM();
+            }
+
+            $('settings-modal').classList.add('hidden');
+        }
+    });
+
     initVocabPool();
     updateBestTimeUI();
     renderLeaderboard();
+
     currentWordEl.style.cursor = 'pointer';
     currentWordEl.title = "點擊即可標記/取消標記為不熟單字";
     currentWordEl.onclick = () => {
@@ -467,11 +741,11 @@ window.addEventListener('DOMContentLoaded', () => {
         playClickSound();
         isCurrentQuestionMarked = !isCurrentQuestionMarked;
         if (isCurrentQuestionMarked) {
-            currentWordEl.style.backgroundColor = '#f7f387';
+            currentWordEl.classList.add('marked');
             markAddedNew = !wrongQuestionsList.some(w => w.word === currentQuestion.word);
             if (markAddedNew) recordWrongItem(currentQuestion.word, currentQuestion.meaning, currentQuestion.level, MANUAL_MARK);
         } else {
-            currentWordEl.style.backgroundColor = '';
+            currentWordEl.classList.remove('marked');
             if (markAddedNew) wrongQuestionsList = wrongQuestionsList.filter(w => w.word !== currentQuestion.word);
             markAddedNew = false;
         }
@@ -504,9 +778,10 @@ function updateStatsUI() {
 }
 
 function loadNextQuestion() {
+    if (currentMode === 'multi' && !isMultiplayerActive) return; // 遊戲已結束/淘汰，不要覆蓋結算畫面
     if (!activePool.length || !distractPool.length) return;
     isCurrentQuestionMarked = false; markAddedNew = false;
-    currentWordEl.style.backgroundColor = '';
+    currentWordEl.classList.remove('marked');
     if (currentMode === 'multi') {
         // 以「本局種子 + 第幾題」決定題目，每局不同、同局所有玩家相同
         const qSeed = ((multiSeed % 4294967296) + Math.imul(multiQIndex + 1, 0x9E3779B1)) >>> 0;
@@ -516,6 +791,8 @@ function loadNextQuestion() {
         currentQuestion = makeQuestion(activePool, distractPool);
     }
     currentWordEl.textContent = currentQuestion.word;
+    // 每次換新題目時，自動朗讀英文單字
+    speakWord(currentQuestion.word);
     renderOptions();
 }
 
@@ -552,6 +829,7 @@ function startBattleGame() {
     correctCount = 0; wrongCount = 0; score = 0;
     wrongQuestionsList = [];
     singlePlaying = true; isMultiplayerActive = false;
+    sessionRecorded = false; sessionStart = Date.now(); sessionMaxCombo = 0;
 
     if (allVocabPool.length === 0) initVocabPool();
     activePool = practice ? practicePool : allVocabPool;
@@ -622,6 +900,8 @@ function handleAnswer(selectedIndex) {
         recordWrongItem(currentQuestion.word, currentQuestion.meaning, currentQuestion.level, currentQuestion.options[selectedIndex]);
         if (!practice) { myCombo = 0; myHp = Math.max(0, myHp - 25); }
     }
+    sessionMaxCombo = Math.max(sessionMaxCombo, myCombo);
+    if (hasProfile()) Profile.recordAnswer(currentQuestion, ok, myCombo);
     flashWord(ok);
     updateComboUI(); updateStatsUI();
     if (!practice) renderScoreboard();
@@ -656,6 +936,7 @@ function handleGameOver(unanswered) {
         notes.push('🎉 刷新分數紀錄，已登上分數榜！');
     }
     updateBestTimeUI();
+    recordSession('ranked');
     renderWrongWordsReview(buildSummary('💀 遊戲結束', notes));
 }
 
@@ -664,6 +945,7 @@ function finishPractice() {
     singlePlaying = false;
     disableAllOptionButtons();
     btnFinishPractice.style.display = 'none';
+    recordSession('practice');
     renderWrongWordsReview(buildSummary('🏁 練習結算'));
 }
 btnFinishPractice.onclick = () => { playClickSound(); finishPractice(); };
@@ -686,10 +968,31 @@ function launchSingleGame() {
 }
 
 // ==================== 7. 選單按鈕 ====================
-$('btn-goto-single').onclick = () => { playClickSound(); showMenu('single'); };
-$('btn-goto-multi').onclick = () => { playClickSound(); showMenu('multi'); };
-$('btn-back-to-main').onclick = () => { playClickSound(); showMenu('main'); };
-$('btn-back-from-multi').onclick = () => { playClickSound(); showMenu('main'); };
+const globalLeaderboardCard = $('global-leaderboard-card');
+
+$('btn-goto-single').onclick = () => { 
+    playClickSound(); 
+    showMenu('single'); 
+    if(globalLeaderboardCard) globalLeaderboardCard.style.display = 'none'; // 隱藏排行榜
+};
+
+$('btn-goto-multi').onclick = () => { 
+    playClickSound(); 
+    showMenu('multi'); 
+    if(globalLeaderboardCard) globalLeaderboardCard.style.display = 'none'; // 隱藏排行榜
+};
+
+$('btn-back-to-main').onclick = () => { 
+    playClickSound(); 
+    showMenu('main'); 
+    if(globalLeaderboardCard) globalLeaderboardCard.style.display = 'block'; // 返回主頁時顯示排行榜
+};
+
+$('btn-back-from-multi').onclick = () => { 
+    playClickSound(); 
+    showMenu('main'); 
+    if(globalLeaderboardCard) globalLeaderboardCard.style.display = 'block'; // 返回主頁時顯示排行榜
+};
 $('btn-goto-bank').onclick = () => { playClickSound(); showScreen('bank'); renderBank(); };
 $('btn-start-ranked').onclick = () => { playClickSound(); currentMode = 'ranked'; launchSingleGame(); };
 $('btn-start-practice').onclick = () => {
@@ -711,7 +1014,33 @@ $('btn-practice-start').onclick = () => {
     currentMode = 'practice';
     launchSingleGame();
 };
-$('btn-help').onclick = () => { playClickSound(); $('help-modal').classList.remove('hidden'); };
+// 💡 請在此定義你當前「最新的使用說明內容版本號」（每次更新使用說明時，只要把版號改大即可）
+const CURRENT_HELP_VERSION = '20261022_v2';
+
+// 檢查並更新紅點顯示狀態
+function checkHelpBadge() {
+    const lastReadVersion = localStorage.getItem('vocab_help_version');
+    const badge = $('help-badge');
+    if (badge) {
+        // 如果瀏覽器儲存的版本跟目前最新版本不同，就顯示紅點
+        badge.classList.toggle('hidden', lastReadVersion === CURRENT_HELP_VERSION);
+    }
+}
+
+$('btn-help').onclick = () => {
+    playClickSound();
+    $('help-modal').classList.remove('hidden');
+
+    // 💡 當使用者點擊打開說明時，立即記錄為「已讀最新版本」，並隱藏紅點
+    localStorage.setItem('vocab_help_version', CURRENT_HELP_VERSION);
+    const badge = $('help-badge');
+    if (badge) badge.classList.add('hidden');
+};
+
+// 網頁載入完成時執行檢查
+document.addEventListener('DOMContentLoaded', () => {
+    checkHelpBadge();
+});
 $('btn-help-close').onclick = () => { playClickSound(); $('help-modal').classList.add('hidden'); };
 $('help-modal').addEventListener('click', e => { if (e.target.id === 'help-modal') e.target.classList.add('hidden'); });
 
@@ -789,12 +1118,12 @@ function renderRoomPlayers(room) {
     playerListContainer.innerHTML = '';
     Object.values(room.players || {}).forEach(p => {
         let tag;
-        if (p.isHost) tag = '<span style="font-size: 12px; color: #d97706;">👑 房主</span>';
-        else if (p.ready) tag = '<span style="font-size: 12px; color: #16a34a; font-weight: 700;">✅ 準備就緒</span>';
-        else tag = '<span style="font-size: 12px; color: #f59e0b; font-weight: 700;">⏳ 稍等一下</span>';
+        if (p.isHost) tag = '<span class="tag-host">👑 房主</span>';
+        else if (p.ready) tag = '<span class="tag-ready">✅ 準備就緒</span>';
+        else tag = '<span class="tag-wait">⏳ 稍等一下</span>';
         const item = document.createElement('div');
-        item.style.cssText = "display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #fff; border-radius: 6px; border: 1px solid #e2e8f0; margin-bottom: 6px;";
-        item.innerHTML = `<span style="font-weight: 500; color: #1e293b;">${esc(p.name || '未知玩家')}${p.name === playerName ? ' (你)' : ''}</span>${tag}`;
+        item.className = 'room-player';
+        item.innerHTML = `<span class="nm">${esc(p.name || '未知玩家')}${p.name === playerName ? ' (你)' : ''}</span>${tag}`;
         playerListContainer.appendChild(item);
     });
 }
@@ -905,14 +1234,17 @@ function startMultiplayerGameSession(room) {
     multiMaxHp = room.maxHp || Math.max(1, (room.startCount || 2) - 1) * 100;
     multiSeed = Number(room.round) || Date.now();
     multiQIndex = 0;
-    myHp = multiMaxHp; myCombo = 0;    // ← 每局開始一律滿血
-    correctCount = 0; wrongCount = 0;
+    myHp = multiMaxHp; myCombo = 0;
+    correctCount = 0; wrongCount = 0; score = 0;
     wrongQuestionsList = [];
     lastSelfActionTime = Date.now();
+    scoreboardFrozen = false; lastPlayersSnapshot = null;
+    sessionRecorded = false; sessionStart = Date.now(); sessionMaxCombo = 0;
 
     configureBattleUI('multi');
     scoreboardEl.innerHTML = '';
     wrongWordsContainer.classList.add('hidden');
+    currentWordEl.classList.remove('marked', 'flash-correct', 'flash-wrong');
     updateComboUI();
     showScreen('battle');
     startBGM();
@@ -925,38 +1257,37 @@ function startMultiplayerGameSession(room) {
     loadNextQuestion();
 }
 
-function syncMyHpToFirebase() {
+// 自己的血量一律用 transaction 修改（Firebase 才是唯一真相，避免覆蓋對手的攻擊）
+function adjustMyHp(delta) {
     if (!currentRoomRef) return;
-    myHp = Math.max(0, Math.min(multiMaxHp, Math.round(myHp)));
-    currentRoomRef.child(`players/${mySafeKey()}`).update({ hp: myHp });
+    currentRoomRef.child(`players/${mySafeKey()}`).transaction(p => {
+        if (!p || p.isDead) return p;
+        const hp = Math.max(0, Math.min(multiMaxHp, Math.round((p.hp || 0) + delta)));
+        p.hp = hp;
+        if (hp <= 0) p.isDead = true;
+        return p;
+    });
 }
 
-function renderMultiplayerScoreboard(playersObj) {
+function renderMultiplayerScoreboard(playersObj, winnerName) {
     scoreboardEl.innerHTML = '';
     const arr = Object.values(playersObj);
     arr.sort((a, b) => (a.name === playerName ? 1 : 0) - (b.name === playerName ? 1 : 0));
 
     arr.forEach(player => {
         const isMe = player.name === playerName;
-        const displayHp = isMe ? myHp : (player.hp || 0);
-        const isDead = player.isDead || displayHp <= 0;
-        const pct = Math.max(0, Math.min(100, displayHp / multiMaxHp * 100));
-        const low = pct <= 30;
+        const hp = Math.max(0, Math.min(multiMaxHp, player.hp || 0));
+        const isDead = !!player.isDead || hp <= 0;
+        const isWinner = !!winnerName && player.name === winnerName;
+        const pct = hp / multiMaxHp * 100;
 
         const item = document.createElement('div');
-        if (isMe) {
-            item.id = 'my-multiplayer-row';
-            item.style.cssText = `background: #eff6ff; border: 2px solid #3b82f6; padding: 10px 14px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; opacity: ${isDead ? '0.6' : '1'};`;
-        } else {
-            item.className = 'battle-player-row';
-            item.style.cssText = `background: #ffffff; padding: 10px 14px; border-radius: 12px; border: 1px solid ${isDead ? '#fca5a5' : '#cbd5e1'}; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; opacity: ${isDead ? '0.6' : '1'};`;
-        }
+        item.className = 'mp-row' + (isMe ? ' me' : '') + (isDead && !isWinner ? ' dead' : '') + (isWinner ? ' winner' : '');
+        if (isMe) item.id = 'my-multiplayer-row';
         item.innerHTML = `
-            <span class="player-name-tag" style="font-weight: 600; font-size: 14px; min-width: 70px; color: ${isMe ? '#1d4ed8' : '#334155'};">${esc(player.name)} ${isMe ? '(你)' : ''}</span>
-            <div class="hp-bar-outer" style="flex: 1; height: 10px; background: #e2e8f0; border-radius: 5px; margin: 0 12px; overflow: hidden;">
-                <div class="hp-bar-inner ${low ? 'low' : ''}" style="height: 100%; width: ${pct}%; background: ${low ? '#ef4444' : '#22c55e'}; border-radius: 5px; transition: width 0.3s ease;"></div>
-            </div>
-            <span class="status-badge" style="font-size: 13px; font-weight: 700; color: ${isDead ? '#dc2626' : '#64748b'}; min-width: 60px; text-align: right;">${isDead ? '💀 淘汰' : `HP: ${displayHp}`}</span>`;
+            <span class="player-name-tag">${isWinner ? '👑 ' : ''}${esc(player.name)}${isMe ? ' (你)' : ''}</span>
+            <div class="hp-bar-outer"><div class="hp-bar-inner ${pct <= 30 ? 'low' : ''}" style="width: ${pct}%;"></div></div>
+            <span class="status-badge ${isDead && !isWinner ? 'dead' : ''}">${isDead && !isWinner ? '💀 淘汰' : `HP: ${hp}`}</span>`;
         scoreboardEl.appendChild(item);
     });
 }
@@ -967,11 +1298,12 @@ function handlePlayerElimination() {
     myHp = 0;
     stopBGM();
     if (currentRoomRef) currentRoomRef.child(`players/${mySafeKey()}`).update({ hp: 0, isDead: true });
+    recordSession('multi', false);
 
     currentWordEl.textContent = "💀 你已被淘汰！";
-    optionsContainerEl.innerHTML = `<div style="text-align: center; padding: 15px 0;">
-        <p style="color: #dc2626; font-size: 18px; font-weight: bold; margin-bottom: 6px;">你已被淘汰，進入觀戰模式</p>
-        <p style="color: #64748b; font-size: 14px;">可先檢討錯題，並將不熟的單字加入錯題庫</p></div>`;
+    optionsContainerEl.innerHTML = `<div class="mp-result"><div class="mp-crown">💀</div>
+        <div class="mp-winner" style="color: var(--bad-text);">你已被淘汰，進入觀戰模式</div>
+        <div class="mp-sub">可先檢討錯題，並將不熟的單字加入錯題庫</div></div>`;
     renderWrongWordsReview(buildSummary('💀 你已被淘汰'));
 }
 
@@ -983,17 +1315,30 @@ function declareWinnerIfNeeded(room) {
     currentRoomRef.update({ status: 'ended', winner: alive.length === 1 ? alive[0].name : '' });
 }
 
-function showMultiplayerResult(winnerName) {
+// 每位玩家（包含贏家與已淘汰者）都會看到：勝利者是誰 + 最終排名
+function showMultiplayerResult(winnerName, players) {
     clearInterval(gameTimerInterval); clearInterval(secondCounterInterval);
     stopBGM();
     isMultiplayerActive = false;
+    if (players) lastPlayersSnapshot = players;
+    scoreboardFrozen = true; // 之後別人返回房間重置血量，也不會影響這個畫面
+    if (lastPlayersSnapshot) renderMultiplayerScoreboard(lastPlayersSnapshot, winnerName);
+
     const iAmWinner = !!winnerName && winnerName === playerName;
+    const ranking = Object.values(lastPlayersSnapshot || {}).map(p => ({
+        name: p.name, hp: Math.max(0, p.hp || 0), alive: !p.isDead && (p.hp || 0) > 0
+    })).sort((a, b) => (b.name === winnerName) - (a.name === winnerName) || b.alive - a.alive || b.hp - a.hp);
 
     currentWordEl.textContent = iAmWinner ? '🏆 恭喜你獲得最後勝利！'
         : (winnerName ? `🏁 遊戲結束！勝利者：${winnerName}` : '🏁 遊戲結束！本局平手');
-    optionsContainerEl.innerHTML = `<div style="text-align: center; padding: 15px 0;">
-        <p style="color: ${iAmWinner ? '#16a34a' : '#64748b'}; font-size: 18px; font-weight: bold;">
-        ${iAmWinner ? '🎉 你是最後的生存者，獲得 MVP！' : '比賽已結束，下次再接再厲！'}</p></div>`;
+    optionsContainerEl.innerHTML = `<div class="mp-result ${iAmWinner ? 'win' : ''}">
+        <div class="mp-crown">${winnerName ? '👑' : '🤝'}</div>
+        <div class="mp-winner">${winnerName ? esc(winnerName) + ' 獲勝！' : '本局平手'}</div>
+        <div class="mp-sub">${iAmWinner ? '🎉 你是最後的生存者，獲得 MVP！' : '比賽已結束，下次再接再厲！'}</div>
+        <div class="mp-rank">${ranking.map((p, i) => `<div class="mp-rank-row ${i === 0 && winnerName ? 'first' : ''}">
+            <span>${i === 0 && winnerName ? '🥇' : i + 1 + '.'} ${esc(p.name)}${p.name === playerName ? ' (你)' : ''}</span>
+            <span class="hp">${p.alive ? 'HP ' + p.hp : '💀 淘汰'}</span></div>`).join('')}</div></div>`;
+    recordSession('multi', iAmWinner);
     renderWrongWordsReview(buildSummary(iAmWinner ? '🏆 勝利！' : '🏁 本局結束'));
 }
 
@@ -1009,7 +1354,7 @@ function handleMultiplayerAnswer(selectedIndex) {
         const mult = 1 + myCombo * 0.01;
         const healAmount = Math.round(10 * mult);
         const damageAmount = Math.round(15 * mult);
-        myHp = Math.min(multiMaxHp, Math.max(0, myHp) + healAmount);
+        adjustMyHp(healAmount); // 先回血，再攻擊，確保最終結算時自己的血量是最新的
 
         if (currentRoomRef) {
             const me = mySafeKey();
@@ -1031,14 +1376,15 @@ function handleMultiplayerAnswer(selectedIndex) {
         wrongCount++;
         myCombo = 0;
         recordWrongItem(currentQuestion.word, currentQuestion.meaning, currentQuestion.level, currentQuestion.options[selectedIndex]);
-        myHp = Math.max(0, myHp - 5);
-        triggerDamageEffect(5);
+        adjustMyHp(-5); // 扣血特效由房間監聽偵測到血量下降時觸發
     }
 
+    sessionMaxCombo = Math.max(sessionMaxCombo, myCombo);
+    if (hasProfile()) Profile.recordAnswer(currentQuestion, isCorrect, myCombo);
+    flashWord(isCorrect);   // 與單人模式相同的綠框 / 紅框特效
     updateComboUI();
-    syncMyHpToFirebase();
-    if (myHp <= 0) handlePlayerElimination();
-    else loadNextQuestion();
+    if (!isMultiplayerActive) return; // 剛好這一擊結束了遊戲（贏家）或自己被淘汰：不要再出新題蓋掉結算畫面
+    loadNextQuestion();
 }
 
 function listenRoomData() {
@@ -1048,7 +1394,7 @@ function listenRoomData() {
         if (!room) return;
         lastRoomStatus = room.status;
 
-        // 新的一局：優先處理，先把自己設為滿血再畫記分板
+        // 新的一局
         if (room.status === 'playing' && room.round && room.round !== currentRound) {
             currentRound = room.round;
             endedRoundHandled = null;
@@ -1061,51 +1407,48 @@ function listenRoomData() {
         renderRoomPlayers(room);
         updateRoomUIByRole(room);
 
+        const inThisRound = room.round === currentRound;
         if (room.players) {
             const meData = room.players[mySafeKey()];
-            if (meData && typeof meData.hp === 'number' && isMultiplayerActive && room.round === currentRound) {
-                // 超過 1.2 秒沒操作時，血量下降代表被對手攻擊
-                if (Date.now() - lastSelfActionTime > 1200 && meData.hp < myHp) {
-                    const diff = myHp - meData.hp;
-                    myHp = meData.hp;
-                    renderMultiplayerScoreboard(room.players);
-                    triggerDamageEffect(diff);
-                }
-                if (myHp <= 0) handlePlayerElimination();
+            if (meData && typeof meData.hp === 'number' && isMultiplayerActive && inThisRound) {
+                // Firebase 為準：血量變化就同步，並依方向播放特效
+                const prev = myHp;
+                myHp = meData.hp;
+                if (!scoreboardFrozen && !battleScreenHidden()) renderMultiplayerScoreboard(room.players);
+                if (meData.hp < prev) triggerDamageEffect(prev - meData.hp);
+                else if (meData.hp > prev) triggerHealEffect(meData.hp - prev);
+                if (meData.isDead || meData.hp <= 0) handlePlayerElimination();
+            } else if (!scoreboardFrozen && !battleScreenHidden() && inThisRound && room.status === 'playing') {
+                renderMultiplayerScoreboard(room.players); // 已淘汰的觀戰者也要看到即時血量
             }
-            if (!battleScreenHidden()) renderMultiplayerScoreboard(room.players);
         }
 
-        if (room.status === 'playing' && room.round === currentRound) declareWinnerIfNeeded(room);
+        if (room.status === 'playing' && inThisRound) declareWinnerIfNeeded(room);
 
-        if (room.status === 'ended' && room.round === currentRound && endedRoundHandled !== room.round) {
+        if (room.status === 'ended' && inThisRound && endedRoundHandled !== room.round) {
             endedRoundHandled = room.round;
-            showMultiplayerResult(room.winner);
+            showMultiplayerResult(room.winner, room.players);
         }
     });
 }
 function battleScreenHidden() { return screens.battle.classList.contains('hidden'); }
 
-// ==================== 💥 血條受傷特效觸發函式 ====================
-function triggerDamageEffect(damageNum = 15) {
+// ==================== 💥 血條特效 ====================
+function floatText(text, cls, rowFlashCls) {
     const myRow = document.getElementById('my-multiplayer-row');
-    if (myRow) {
-        myRow.classList.remove('row-flash-damage');
-        void myRow.offsetWidth; // 觸發 reflow 重新播放動畫
-        myRow.classList.add('row-flash-damage');
+    if (!myRow) return;
+    myRow.classList.remove('row-flash-damage', 'row-flash-heal');
+    void myRow.offsetWidth; // 重新播放動畫
+    myRow.classList.add(rowFlashCls);
 
-        const floatEl = document.createElement('div');
-        floatEl.className = 'floating-damage';
-        floatEl.textContent = `-${damageNum}`;
-        
-        const rect = myRow.getBoundingClientRect();
-        const randomX = rect.left + rect.width / 2 + (Math.random() * 30 - 15);
-        const randomY = rect.top + (Math.random() * 10 - 5);
-        
-        floatEl.style.left = `${randomX}px`;
-        floatEl.style.top = `${randomY}px`;
-        
-        document.body.appendChild(floatEl);
-        setTimeout(() => floatEl.remove(), 600);
-    }
+    const el = document.createElement('div');
+    el.className = cls;
+    el.textContent = text;
+    const rect = myRow.getBoundingClientRect();
+    el.style.left = `${rect.left + rect.width / 2 + (Math.random() * 30 - 15)}px`;
+    el.style.top = `${rect.top + (Math.random() * 10 - 5)}px`;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 700);
 }
+function triggerDamageEffect(n = 15) { floatText(`-${n}`, 'floating-damage', 'row-flash-damage'); }
+function triggerHealEffect(n = 10) { floatText(`+${n}`, 'floating-heal', 'row-flash-heal'); }

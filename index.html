@@ -28,59 +28,58 @@
         <!-- ==================== 1. 遊戲大廳畫面 ==================== -->
         <div id="lobby-screen" class="screen">
 
-            <!-- 🏆 全伺服器排行榜 -->
-            <div id="global-leaderboard-card"
-                style="width: 100%; margin: 0 0 16px 0; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 14px 18px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); box-sizing: border-box;">
-                <div
-                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; flex-wrap: wrap;">
-                    <span style="font-weight: bold; color: #1e293b; font-size: 15px;">🏆 全伺服器排行榜</span>
-                    <span id="best-record-text" style="font-size: 13px; color: #2563eb; font-weight: bold;">我的最高紀錄：0
-                        秒</span>
-                </div>
-
-                <!-- 排行榜分頁：秒數 / 分數 -->
-                <div class="lb-tabs">
-                    <button class="lb-tab active" data-tab="time">⏱️ 生存秒數榜</button>
-                    <button class="lb-tab" data-tab="score">⭐ 分數榜</button>
-                </div>
-
-                <div id="leaderboard-list"
-                    style="max-height: 260px; overflow-y: auto; background: #ffffff; padding: 20px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 13px; color: #64748b;">
-                    <div style="text-align: center; padding: 8px 0; color: #94a3b8;">載入中...</div>
-                </div>
-            </div>
 
             <h1>英語單字King</h1>
             <p class="subtitle">Vocabulary Battle Royale & Rank</p>
 
-            <div class="input-group">
-                <label for="player-name">你的玩家暱稱：</label>
-                <input type="text" id="player-name" placeholder="請輸入暱稱..." value="">
+            <!-- 個人檔案小卡 -->
+            <div id="profile-chip" class="profile-chip" title="開啟個人檔案">
+                <div class="avatar" id="chip-avatar">?</div>
+                <div>
+                    <div class="chip-name" id="chip-name">訪客</div>
+                    <div class="chip-sub" id="chip-sub">🏅 0 / 0 成就</div>
+                </div>
+                <span class="chip-arrow">›</span>
             </div>
 
             <!-- 主選單 -->
-            <div id="main-menu-options" style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;">
-                <button id="btn-goto-single" class="btn btn-primary" style="background: #2563eb;">單人遊戲</button>
-                <button id="btn-goto-multi" class="btn btn-secondary"
-                    style="background: #259febdb; color: white;">多人遊戲(測試版)</button>
+            <div id="main-menu-options" class="menu-col">
+                <button id="btn-goto-single" class="btn btn-primary">單人遊戲</button>
+                <button id="btn-goto-multi" class="btn btn-sky">多人遊戲(測試版)</button>
+                <button id="btn-goto-profile" class="btn btn-secondary">👤 個人檔案與成就</button>
                 <button id="btn-goto-bank" class="btn btn-secondary">📚 我的錯題庫</button>
-                <button id="btn-help" class="btn btn-secondary">❓ 使用說明</button>
+                <button id="btn-help" class="btn btn-secondary" style="position: relative;">
+                    ❓ 使用說明 <span id="help-badge" class="help-red-dot hidden">NEW</span>
+                </button>
+            </div>
+
+            <!-- 🏆 全伺服器排行榜 -->
+            <div id="global-leaderboard-card" class="lb-card">
+                <div class="lb-head">
+                    <span class="lb-title">🏆 全伺服器排行榜</span>
+                    <span id="best-record-text" class="best-text">我的最高紀錄：0 秒</span>
+                </div>
+                <div class="lb-tabs">
+                    <button class="lb-tab active" data-tab="time">⏱️ 生存秒數榜</button>
+                    <button class="lb-tab" data-tab="score">⭐ 分數榜</button>
+                </div>
+                <div id="leaderboard-list" class="lb-list">
+                    <div class="lb-empty">載入中...</div>
+                </div>
             </div>
 
             <!-- 單人模式子選單 -->
-            <div id="single-mode-menu" class="hidden"
-                style="flex-direction: column; gap: 10px; margin-top: 15px; border-top: 2px dashed #e2e8f0; padding-top: 15px;">
-                <button id="btn-start-ranked" class="btn btn-primary" style="background: #2563eb;">排位賽模式
+            <div id="single-mode-menu" class="submenu hidden">
+                <button id="btn-start-ranked" class="btn btn-primary">排位賽模式
                     (4~6級字・計入排行榜)</button>
-                <button id="btn-start-practice" class="btn btn-primary" style="background: #259feb;">練習模式
+                <button id="btn-start-practice" class="btn btn-sky">練習模式
                     (自選題庫・無壓力複習)</button>
-                <button id="btn-back-to-main" class="btn btn-secondary" style="margin-top: 5px;">返回主選單</button>
+                <button id="btn-back-to-main" class="btn btn-secondary">返回主選單</button>
             </div>
 
             <!-- 練習模式：選擇題庫 -->
-            <div id="practice-setup-box" class="hidden"
-                style="flex-direction: column; gap: 10px; margin-top: 15px; border-top: 2px dashed #e2e8f0; padding-top: 15px;">
-                <p style="font-weight: 600; color: #475569; font-size: 14px;">請選擇練習題庫（可複選）：</p>
+            <div id="practice-setup-box" class="submenu hidden">
+                <p class="submenu-title">請選擇練習題庫（可複選）：</p>
                 <label class="check-row"><input type="checkbox" value="level4" checked> 4 級字</label>
                 <label class="check-row"><input type="checkbox" value="level5"> 5 級字</label>
                 <label class="check-row"><input type="checkbox" value="level6"> 6 級字</label>
@@ -91,8 +90,7 @@
             </div>
 
             <!-- 多人房間 -->
-            <div id="multi-room-box" class="hidden"
-                style="flex-direction: column; margin-top: 15px; border-top: 2px dashed #e2e8f0; padding-top: 15px;">
+            <div id="multi-room-box" class="submenu hidden">
                 <div class="input-group">
                     <label for="room-code-input">房間代碼 (加入房間時填寫)：</label>
                     <input type="text" id="room-code-input" placeholder="例如: 4982" maxlength="4">
@@ -101,7 +99,7 @@
                     <button id="btn-create-room" class="btn btn-primary">建立房間 (房主)</button>
                     <button id="btn-join-room" class="btn btn-secondary">加入房間</button>
                 </div>
-                <button id="btn-back-from-multi" class="btn btn-secondary" style="width: 100%; margin-top: 10px;">
+                <button id="btn-back-from-multi" class="btn btn-secondary" style="margin-top: 10px;">
                     返回主選單</button>
             </div>
         </div>
@@ -114,26 +112,19 @@
                 <span id="display-room-code" class="room-code">#----</span>
             </div>
 
-            <div id="host-settings-panel"
-                style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; padding: 15px; margin: 15px 0;">
-                <h3
-                    style="margin-top: 0; font-size: 15px; color: #334155; display: flex; align-items: center; gap: 6px;">
-                    ⚙️ 遊戲房間設定 <span id="host-badge"
-                        style="font-size: 12px; background: #2563eb; color: white; padding: 2px 8px; border-radius: 4px;">房主控制區</span>
-                </h3>
-                <div style="margin-top: 10px;">
-                    <label style="font-size: 13px; color: #475569; display: block; margin-bottom: 4px;">單字範圍難度：</label>
-                    <select id="select-vocab-level"
-                        style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1; background: #fff;">
-                        <option value="all">全部單字 (4~6 級)</option>
-                        <option value="level4">僅 4 級單字</option>
-                        <option value="level5">僅 5 級單字</option>
-                        <option value="level6">僅 6 級單字</option>
-                    </select>
-                </div>
+            <div id="host-settings-panel" class="host-panel">
+                <h3 class="host-title">⚙️ 遊戲房間設定 <span id="host-badge" class="host-badge">房主控制區</span></h3>
+                <label class="field-label" for="select-vocab-level"
+                    style="display:block; margin-bottom:4px;">單字範圍難度：</label>
+                <select id="select-vocab-level" class="select">
+                    <option value="all">全部單字 (4~6 級)</option>
+                    <option value="level4">僅 4 級單字</option>
+                    <option value="level5">僅 5 級單字</option>
+                    <option value="level6">僅 6 級單字</option>
+                </select>
             </div>
 
-            <label>目前房間內成員：</label>
+            <label class="field-label">目前房間內成員：</label>
             <div id="player-list" class="player-list"></div>
 
             <div class="btn-grid">
@@ -151,7 +142,7 @@
             <div class="battle-scoreboard" id="scoreboard"></div>
 
             <div class="question-box" id="question-box-container">
-                <p style="color: #888; margin-bottom: 5px;">請選擇正確的中文意思：</p>
+                <p class="hint-text">請選擇正確的中文意思：</p>
                 <div class="word-display" id="current-word">載入中...</div>
 
                 <div id="options-container" class="options-grid"></div>
@@ -167,7 +158,7 @@
                     <div>📉 錯誤率 <b id="stat-rate">0.0%</b></div>
                 </div>
 
-                <div id="survival-wrap" style="text-align: center; font-weight: bold; color: #64748b; margin-top: 5px;">
+                <div id="survival-wrap" class="survival-wrap">
                     ⏱️ 生存時間：<span id="survival-timer">0</span> 秒
                 </div>
 
@@ -175,21 +166,62 @@
                 <button id="btn-finish-practice" class="btn btn-danger" style="display: none;">立即結算</button>
 
                 <!-- 本局結算 / 錯題檢討 -->
-                <div id="wrong-words-container" class="hidden"
-                    style="margin-top: 20px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 16px; padding: 16px; text-align: left;">
+                <div id="wrong-words-container" class="review-box hidden">
                     <div id="result-summary"></div>
-                    <h3 style="color: #ef4444; font-size: 16px; margin: 12px 0 6px; text-align: center;">📖 本局錯題檢討</h3>
-                    <p id="review-hint"
-                        style="font-size: 12px; color: #64748b; text-align: center; margin-bottom: 8px;">
+                    <h3 class="review-title">📖 本局錯題檢討</h3>
+                    <p id="review-hint" class="review-hint">
                         👉 將單字向右滑動即可加入「我的錯題庫」</p>
                     <button id="btn-add-all-wrong" class="btn btn-primary"
                         style="width: 100%; padding: 8px; margin-bottom: 10px;">全部加入我的錯題庫</button>
-                    <div id="wrong-words-list"
-                        style="display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto;">
+                    <div id="wrong-words-list" class="review-list">
                     </div>
                     <button id="btn-close-review" class="btn btn-secondary"
                         style="width: 100%; margin-top: 12px; padding: 8px;">確定並返回大廳</button>
                 </div>
+            </div>
+        </div>
+
+        <!-- ==================== 5. 個人檔案 ==================== -->
+        <div id="profile-screen" class="screen hidden">
+            <div class="modal-header-row" style="display: flex; justify-content: space-between; align-items: center;">
+                <h1>個人檔案</h1>
+                <button id="btn-profile-close-top" class="btn btn-secondary btn-sm"
+                    style="padding: 6px 12px;">✕</button>
+            </div>
+            <div class="profile-head">
+                <div class="avatar avatar-lg" id="profile-avatar" title="點擊更換頭像"></div>
+                <input type="file" id="avatar-file" accept="image/*" hidden>
+                <div class="profile-edit">
+                    <label class="field-label" for="profile-name-input">暱稱</label>
+                    <div class="row">
+                        <input type="text" id="profile-name-input" class="text-input" maxlength="12"
+                            placeholder="輸入新暱稱">
+                        <button id="btn-profile-save" class="btn btn-primary btn-sm">儲存</button>
+                    </div>
+                    <div>
+                        <button id="btn-avatar-pick" class="btn-link">📷 上傳頭像</button>
+                        <button id="btn-avatar-remove" class="btn-link">移除頭像</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stat-cards" id="profile-stats"></div>
+
+            <h3 class="section-title">📈 錯誤率變化（最近 20 局）</h3>
+            <div class="chart-box" id="profile-chart"></div>
+
+            <h3 class="section-title">🎯 各級單字表現</h3>
+            <div class="lv-bars" id="profile-levels"></div>
+
+            <h3 class="section-title">🕘 最近紀錄</h3>
+            <div class="hist-list" id="profile-history"></div>
+
+            <h3 class="section-title">🏅 成就 <span id="ach-count"></span></h3>
+            <div class="ach-grid" id="profile-achievements"></div>
+
+            <div class="btn-grid">
+                <button id="btn-profile-back" class="btn btn-secondary">返回主選單</button>
+                <button id="btn-profile-reset" class="btn btn-danger">清除個人紀錄</button>
             </div>
         </div>
 
@@ -230,6 +262,19 @@
         <div class="modal-card">
             <h2>❓ 使用說明</h2>
             <div class="help-content">
+                <!-- 新增：更新日誌區塊 -->
+                <h4>📢 最近更新</h4>
+                <ul>
+                    <li><b>2026/10/22 個人檔案</b>：可上傳頭像、更改暱稱，並查看累計答題、複習單字數、各級正確率、錯誤率歷史曲線與最近遊玩紀錄。</li>
+                    <li><b>2026/10/22 成就系統</b>：連擊、生存、多人勝場、單字量、連續登入等 20 多個成就，解鎖時會跳出通知，並展示在個人檔案中。</li>
+                    <li><b>2026/10/22
+                            多人模式改版</b>：新增答對／答錯閃框特效與扣血、回血飄字；修正結束時血量顯示錯誤（淘汰者復活、返回房間後血條跳回滿血）；<b>贏家現在也會看到「勝利者是誰」的結算畫面與最終排名</b>。
+                    </li>
+                    <li><b>2026/10/22 深色模式</b>：重新設計為柔和的藍灰配色，降低刺眼感，所有畫面一致。</li>
+                    <li><b>2026/10/22 朗讀</b>：預設聲線改為 David（若裝置有此聲線）。</li>
+                    <li><b>2026/10/22 報錯與建議</b>：在「⚙️ 設定」中新增回饋按鈕，訊息會寄到開發者信箱。</li>
+                    <li><b>語音朗讀功能</b>：單人遊戲出題時會自動朗讀英文單字，錯題庫中也能隨時點擊 🔊 按鈕聆聽標準發音！</li>
+                </ul>
                 <h4>🎮 單人遊戲</h4>
                 <ul>
                     <li><b>排位賽</b>：4~6 級單字混合出題。血量會持續倒數，答對 +15 血、答錯 -25 血，血量歸零即結束。成績計入排行榜。</li>
@@ -251,6 +296,12 @@
                     <li>在錯題庫可依級數篩選、依字首或級數分組、搜尋單字；已經會的單字按「我會了」即可移除。</li>
                     <li>錯題庫存在你這台裝置的瀏覽器中。</li>
                 </ul>
+                <h4>👤 個人檔案與成就</h4>
+                <ul>
+                    <li>大廳點擊頭像小卡或「個人檔案與成就」即可開啟；點頭像可上傳圖片（會自動裁成正方形並壓縮）。</li>
+                    <li>所有個人紀錄與成就都存在你這台裝置的瀏覽器中，清除瀏覽器資料會一併消失。</li>
+                    <li>頭像目前只會顯示在你自己的畫面，不會上傳到伺服器。</li>
+                </ul>
                 <h4>🏆 排行榜</h4>
                 <ul>
                     <li>大廳最上方可切換「生存秒數榜」與「分數榜」，只有排位賽成績會上榜。</li>
@@ -265,7 +316,77 @@
     <script src="vocab_level5.js"></script>
     <script src="vocab_level6.js"></script>
 
-    <script src="app.js?v=4"></script>
+    <!-- ⚙️ 浮動設定按鈕 (懸浮球) -->
+    <button id="btn-floating-settings" title="遊戲設定">⚙️</button>
+
+    <!-- ⚙️ 遊戲設定彈窗 -->
+    <div id="settings-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <h2>⚙️ 遊戲設定</h2>
+            <div class="help-content set-col">
+                <label class="check-row">
+                    <input type="checkbox" id="setting-speech" checked> 題目朗讀
+                </label>
+                <div class="set-field">
+                    <label for="setting-speech-volume" class="field-label">朗讀音量(<span
+                            id="volume-val">100</span>%)</label>
+                    <input type="range" id="setting-speech-volume" min="0" max="100" value="100">
+                </div>
+                <div class="set-field">
+                    <label for="setting-speech-voice" class="field-label">朗讀聲線選擇</label>
+                    <select id="setting-speech-voice" class="select">
+                        <option value="">預設 </option>
+                    </select>
+                </div>
+                <label class="check-row">
+                    <input type="checkbox" id="setting-sound" checked> 遊戲音效與背景音樂
+                </label>
+                <label class="check-row">
+                    <input type="checkbox" id="setting-darkmode"> 啟用深色模式
+                </label>
+                <button id="btn-open-feedback" class="btn btn-secondary">💬 報錯與建議</button>
+            </div>
+            <button id="btn-settings-close" class="btn btn-primary"
+                style="width: 100%; margin-top: 12px;">儲存並關閉</button>
+        </div>
+    </div>
+
+    <!-- 💬 報錯與建議彈窗 -->
+    <div id="feedback-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <h2>💬 報錯與建議</h2>
+            <div class="help-content set-col">
+                <div class="set-field">
+                    <label class="field-label" for="fb-type">類型</label>
+                    <select id="fb-type" class="select">
+                        <option value="錯誤回報">🐞 錯誤回報（題目、翻譯、功能異常）</option>
+                        <option value="功能建議">💡 功能建議</option>
+                        <option value="其他">📝 其他</option>
+                    </select>
+                </div>
+                <div class="set-field">
+                    <label class="field-label" for="fb-message">內容</label>
+                    <textarea id="fb-message" class="fb-field" maxlength="1500"
+                        placeholder="請描述遇到的問題或想法。若是單字錯誤，請附上單字與你認為正確的意思。"></textarea>
+                </div>
+                <div class="set-field">
+                    <label class="field-label" for="fb-contact">聯絡方式（選填，方便回覆你）</label>
+                    <input type="text" id="fb-contact" class="fb-field" maxlength="80" placeholder="Email 或 LINE ID">
+                </div>
+                <div id="fb-status" class="fb-status"></div>
+            </div>
+            <div class="btn-grid" style="margin-top: 4px;">
+                <button id="btn-fb-send" class="btn btn-primary">送出</button>
+                <button id="btn-fb-cancel" class="btn btn-secondary">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🏅 成就通知 -->
+    <div id="toast-root"></div>
+
+    <script src="app.js?v=5"></script>
+    <script src="profile.js?v=1"></script>
 </body>
 
 </html>
