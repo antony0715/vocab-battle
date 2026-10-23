@@ -280,3 +280,52 @@ body.dark-mode .option-btn { color: var(--text); }
     border: 1px solid var(--card);
     letter-spacing: 0.5px;
 }
+/* ==================== 👥 好友系統 ==================== */
+.help-red-dot.online-dot { background-color: var(--ok); }
+.code-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 14px; text-align: center; }
+.code-label { font-size: 13px; font-weight: 600; color: var(--muted-2); }
+.code-value { display: block; width: 100%; margin: 8px 0 6px; padding: 12px 8px; border: 2px dashed var(--accent); border-radius: 12px; background: var(--card); color: var(--accent-text); font-size: 20px; font-weight: 800; letter-spacing: 5px; text-indent: 8px; cursor: pointer; transition: background-color 0.15s, transform 0.1s; }
+.code-value:hover:not(:disabled) { background: var(--accent-soft); }
+.code-value:active { transform: scale(0.98); }
+.code-value:disabled { font-size: 18px; letter-spacing: 2px; text-indent: 0; color: var(--faint); cursor: default; }
+.code-hint { font-size: 12px; color: var(--muted); min-height: 16px; }
+.code-hint.copied { color: var(--ok-text); font-weight: 700; }
+.row-gap { display: flex; gap: 8px; }
+.row-gap input { text-transform: uppercase; letter-spacing: 3px; font-weight: 700; }
+.friend-list { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; }
+.friend-row { display: flex; align-items: center; gap: 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 9px 12px; }
+.fr-av { position: relative; opacity: 0.6; }
+.fr-av.on { opacity: 1; }
+.fr-av.on::after { content: ''; position: absolute; right: 0; bottom: 0; width: 11px; height: 11px; border-radius: 50%; background: var(--ok); border: 2px solid var(--card); }
+.fr-info { flex: 1; min-width: 0; }
+.fr-name { font-weight: 700; font-size: 14px; color: var(--heading); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fr-code { margin-left: 6px; font-size: 11px; font-weight: 600; color: var(--faint); letter-spacing: 1px; }
+.fr-status { font-size: 12px; margin-top: 1px; color: var(--muted); }
+.fr-status.on { color: var(--ok-text); font-weight: 700; }
+.fr-invite { border: none; background: var(--accent); color: var(--on-accent); border-radius: 8px; padding: 7px 10px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.fr-invite:disabled { background: var(--border); color: var(--faint); cursor: not-allowed; }
+.fr-del { border: none; background: none; color: var(--faint); font-size: 14px; cursor: pointer; padding: 6px; border-radius: 6px; }
+.fr-del:hover { color: var(--bad-text); background: var(--bad-soft); }
+#invite-root { position: fixed; top: 76px; left: 0; right: 0; z-index: 3100; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; padding: 0 12px; }
+.invite-card { pointer-events: auto; width: 100%; max-width: 420px; background: var(--card); color: var(--text); border: 2px solid var(--accent); border-radius: 14px; padding: 12px 14px; box-shadow: var(--shadow); display: flex; align-items: center; justify-content: space-between; gap: 10px; animation: toastIn 0.35s ease; }
+.iv-text { font-size: 14px; line-height: 1.45; } .iv-text b { color: var(--heading); }
+.iv-btns { display: flex; gap: 6px; flex-shrink: 0; }
+
+/* ==================== 📖 單字詳情 / 記憶曲線 ==================== */
+.bank-info { cursor: pointer; flex: 1; min-width: 0; }
+.bank-info:hover .bank-word { color: var(--accent-text); }
+.ret-badge { font-size: 11px; font-weight: 700; border-radius: 6px; padding: 1px 6px; margin-left: 4px; }
+.ret-badge.ok { background: var(--ok-soft); color: var(--ok-text); }
+.ret-badge.mid { background: color-mix(in srgb, var(--warn) 22%, var(--card)); color: var(--warn); }
+.ret-badge.low { background: var(--bad-soft); color: var(--bad-text); }
+.word-hero { text-align: center; }
+.wd-word { font-size: 34px; font-weight: 800; color: var(--heading); word-break: break-all; }
+.wd-meaning { font-size: 16px; color: var(--muted-2); margin: 4px 0 8px; }
+.wd-next { font-size: 13px; line-height: 1.5; border-radius: 12px; padding: 10px 14px; }
+.wd-next.ok { background: var(--ok-soft); color: var(--ok-text); }
+.wd-next.due { background: var(--bad-soft); color: var(--bad-text); }
+.wd-note { font-size: 12px; color: var(--muted); line-height: 1.5; margin-top: -10px; }
+.chart-legend { display: flex; justify-content: center; gap: 14px; font-size: 11px; color: var(--muted); margin-top: 4px; }
+.chart-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+.link-row { display: flex; gap: 10px; }
+.link-btn { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; text-decoration: none; font-size: 14px; padding: 12px 8px; }

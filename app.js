@@ -23,7 +23,7 @@ function saveGameSettings() {
 function applyDarkMode(isDark) {
     document.body.classList.toggle('dark-mode', isDark);
 }
-let playerName = "訪客";
+let playerName = "請輸入暱稱";
 let myHp = 100, myCombo = 0;
 let currentQuestion = null;
 let allVocabPool = [], activePool = [], distractPool = [], practicePool = [];
@@ -61,7 +61,7 @@ function recordSession(mode, won = false) {
 }
 
 // ---------- DOM ----------
-const screens = { lobby: $('lobby-screen'), room: $('room-screen'), battle: $('battle-screen'), bank: $('bank-screen'), profile: $('profile-screen') };
+const screens = { lobby: $('lobby-screen'), room: $('room-screen'), battle: $('battle-screen'), bank: $('bank-screen'), profile: $('profile-screen'), friends: $('friends-screen'), word: $('word-screen') };
 function showScreen(n) { Object.entries(screens).forEach(([k, el]) => el && el.classList.toggle('hidden', k !== n)); }
 
 const mainMenuOptions = $('main-menu-options'), singleModeMenu = $('single-mode-menu');
@@ -352,6 +352,15 @@ function addToBank(item) {
     if (hasProfile()) Profile.bankAdded();
     return true;
 }
+// 記錄「錯題庫內單字」在任何模式被作答的結果（供單字詳情的複習時間 / 記憶曲線使用）
+function recordBankReview(word, ok) {
+    const w = wrongBank.find(x => x.word === word);
+    if (!w) return;
+    if (!Array.isArray(w.reviews)) w.reviews = [];
+    w.reviews.push({ t: Date.now(), ok: !!ok });
+    if (w.reviews.length > 60) w.reviews = w.reviews.slice(-60);
+    saveBank();
+}
 function removeFromBank(word) { wrongBank = wrongBank.filter(w => w.word !== word); saveBank(); if (hasProfile()) Profile.bankRemoved(); }
 
 let bankFilter = 'all', bankSort = 'time', bankSearch = '';
@@ -379,8 +388,11 @@ function renderBank() {
         if (bankSort === 'alpha') g = (w.word[0] || '#').toUpperCase();
         else if (bankSort === 'level') g = LEVEL_LABEL[w.level] || w.level;
         if (g !== null && g !== lastGroup) { html += `<div class="bank-group">${esc(g)}</div>`; lastGroup = g; }
+        const ret = Math.round(memoryModel(w).retNow * 100);
+        const retCls = ret >= 70 ? 'ok' : ret >= 40 ? 'mid' : 'low';
         html += `<div class="bank-row">
-            <div><div class="bank-word">${esc(w.word)}<span class="lv-badge">${esc(LEVEL_LABEL[w.level] || '')}</span>
+            <div class="bank-info" data-word="${esc(w.word)}" title="點擊查看單字詳情與記憶曲線"><div class="bank-word">${esc(w.word)}<span class="lv-badge">${esc(LEVEL_LABEL[w.level] || '')}</span>
+            <span class="ret-badge ${retCls}" title="估算的目前記憶保留率">🧠 ${ret}%</span>
             <button class="bank-speak-btn" data-word="${esc(w.word)}" style="background:none; border:none; cursor:pointer; font-size:14px; margin-left:4px;" title="聽發音">🔊</button></div>
             <div class="bank-meaning">${esc(w.meaning)}</div></div>
             <button class="bank-remove" data-word="${esc(w.word)}">✓ 我會了</button></div>`;
@@ -398,12 +410,157 @@ $('bank-list').addEventListener('click', e => {
         return;
     }
 
+    const info = e.target.closest('.bank-info');
+    if (info && !e.target.closest('.bank-remove')) {
+        playClickSound();
+        openWordDetail(info.dataset.word);
+        return;
+    }
+
     const b = e.target.closest('.bank-remove');
     if (!b) return;
     playClickSound();
     removeFromBank(b.dataset.word);
     renderBank();
 });
+
+// ==================== 2-1. 單字詳情 / 記憶曲線 ====================
+// 記憶模型（艾賓浩斯式估算）：保留率 R = e^(-經過時間 / 穩定度 S)
+//  - 加入錯題庫時 S = 2 天；每次「間隔夠久」的答對，S × 2.2；答錯 S × 0.6（最少 0.5 天）
+//  - 10 分鐘內連續重複的答對只算複習紀錄，不增加穩定度（避免短時間刷題把記憶高估）
+//  - 保留率降到 70% 以下就建議複習
+const MEM_DAY = 86400000, MEM_S0 = 2, MEM_GROW = 2.2, MEM_SHRINK = 0.6, MEM_MIN_GAP = 10 * 60000, MEM_THRESHOLD = 0.7;
+function memoryModel(w, now = Date.now()) {
+    const start = w.addedAt || now;
+    const events = (w.reviews || []).filter(r => r.t >= start).sort((a, b) => a.t - b.t);
+    // nodes: 每個節點 = 一次「看到單字」的時間點，從此刻起以該 S 衰減
+    const nodes = [{ t: start, S: MEM_S0, kind: 'add' }];
+    events.forEach(r => {
+        const prev = nodes[nodes.length - 1];
+        let S = prev.S;
+        if (r.ok) { if (r.t - prev.t >= MEM_MIN_GAP) S = S * MEM_GROW; }
+        else S = Math.max(0.5, S * MEM_SHRINK);
+        nodes.push({ t: r.t, S, kind: r.ok ? 'ok' : 'bad' });
+    });
+    const last = nodes[nodes.length - 1];
+    const retAt = t => Math.exp(-Math.max(0, t - last.t) / MEM_DAY / last.S);
+    const nextT = last.t + Math.round(-Math.log(MEM_THRESHOLD) * last.S * MEM_DAY);
+    return { nodes, last, retNow: retAt(now), retAt, nextT, events };
+}
+
+const fmtDateTime = t => { const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+function fmtSpan(ms) {
+    ms = Math.abs(ms);
+    if (ms < 60000) return '不到 1 分鐘';
+    if (ms < 3600000) return Math.round(ms / 60000) + ' 分鐘';
+    if (ms < MEM_DAY) return Math.round(ms / 3600000 * 10) / 10 + ' 小時';
+    return Math.round(ms / MEM_DAY * 10) / 10 + ' 天';
+}
+
+function memoryChart(w) {
+    const now = Date.now(), m = memoryModel(w, now);
+    const t0 = m.nodes[0].t;
+    const tEnd = Math.max(now, m.last.t) + Math.max(2 * MEM_DAY, m.last.S * MEM_DAY * 1.2);
+    const span = tEnd - t0;
+    const W = 320, H = 170, L = 34, R = 10, T = 14, B = 26;
+    const x = t => L + (W - L - R) * ((t - t0) / span);
+    const y = v => T + (H - T - B) * (1 - v);
+    // 每個節點到下一個節點（或終點）之間，取樣畫出衰減線
+    const past = [], future = [];
+    m.nodes.forEach((n, i) => {
+        const segEnd = i < m.nodes.length - 1 ? m.nodes[i + 1].t : tEnd;
+        const steps = 40;
+        for (let k = 0; k <= steps; k++) {
+            const t = n.t + (segEnd - n.t) * k / steps;
+            const r = Math.exp(-(t - n.t) / MEM_DAY / n.S);
+            const pt = `${x(t).toFixed(1)},${y(r).toFixed(1)}`;
+            if (t <= now) past.push(pt);
+            if (t >= now) {
+                if (t > now && !future.length) future.push(`${x(now).toFixed(1)},${y(m.retAt(now)).toFixed(1)}`);
+                future.push(pt);
+            }
+        }
+        // 讓節點之間的鋸齒垂直拉回 100%（上一段結尾 → 下一段起點）
+        if (i < m.nodes.length - 1) past.push(`${x(segEnd).toFixed(1)},${y(1).toFixed(1)}`);
+    });
+    if (!future.length) future.push(`${x(now).toFixed(1)},${y(m.retAt(now)).toFixed(1)}`, `${x(tEnd).toFixed(1)},${y(m.retAt(tEnd)).toFixed(1)}`);
+
+    const grid = [0, 0.5, 1].map(v => `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--border)" stroke-dasharray="3 3"/>
+        <text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" font-size="10" fill="var(--muted)">${Math.round(v * 100)}%</text>`).join('');
+    const th = `<line x1="${L}" x2="${W - R}" y1="${y(MEM_THRESHOLD)}" y2="${y(MEM_THRESHOLD)}" stroke="var(--warn)" stroke-dasharray="5 3" opacity="0.9"/>
+        <text x="${W - R}" y="${y(MEM_THRESHOLD) - 3}" text-anchor="end" font-size="9" fill="var(--warn)">70% 建議複習線</text>`;
+    const dots = m.nodes.map(n => {
+        const col = n.kind === 'add' ? 'var(--warn)' : n.kind === 'ok' ? 'var(--ok)' : 'var(--bad)';
+        const label = n.kind === 'add' ? '加入錯題庫' : n.kind === 'ok' ? '答對' : '答錯';
+        return `<circle cx="${x(n.t).toFixed(1)}" cy="${y(1)}" r="4" fill="${col}" stroke="var(--card)" stroke-width="1.5"><title>${label}・${fmtDateTime(n.t)}</title></circle>`;
+    }).join('');
+    const nowX = x(now);
+    const nowLine = `<line x1="${nowX}" x2="${nowX}" y1="${T}" y2="${H - B}" stroke="var(--accent)" stroke-dasharray="2 3"/>
+        <circle cx="${nowX}" cy="${y(m.retNow)}" r="4" fill="var(--accent)" stroke="var(--card)" stroke-width="1.5"/>
+        <text x="${Math.min(nowX, W - R - 14)}" y="${H - B + 12}" text-anchor="middle" font-size="10" fill="var(--accent-text)">現在</text>`;
+    const nextMark = m.nextT > now && m.nextT < tEnd
+        ? `<line x1="${x(m.nextT)}" x2="${x(m.nextT)}" y1="${y(MEM_THRESHOLD)}" y2="${H - B}" stroke="var(--warn)" stroke-dasharray="2 3"/>
+           <text x="${Math.min(x(m.nextT), W - R - 22)}" y="${H - B + 22}" text-anchor="middle" font-size="9" fill="var(--warn)">建議複習</text>` : '';
+    return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="記憶曲線">${grid}${th}
+        <polyline points="${past.join(' ')}" fill="none" stroke="var(--accent)" stroke-width="2.4" stroke-linejoin="round"/>
+        <polyline points="${future.join(' ')}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-dasharray="5 4" opacity="0.7"/>
+        ${nextMark}${nowLine}${dots}
+        <text x="${L}" y="${H - B + 12}" font-size="10" fill="var(--muted)">${fmtDateTime(t0)}</text></svg>
+        <div class="chart-legend"><span><i style="background:var(--warn)"></i>加入</span><span><i style="background:var(--ok)"></i>答對</span><span><i style="background:var(--bad)"></i>答錯</span></div>`;
+}
+
+let currentDetailWord = null;
+function openWordDetail(word) {
+    const w = wrongBank.find(x => x.word === word);
+    if (!w) return;
+    currentDetailWord = word;
+    renderWordDetail();
+    showScreen('word');
+}
+function renderWordDetail() {
+    const w = wrongBank.find(x => x.word === currentDetailWord);
+    if (!w) { showScreen('bank'); renderBank(); return; }
+    const now = Date.now(), m = memoryModel(w, now);
+    const okN = m.events.filter(r => r.ok).length, badN = m.events.length - okN;
+    const ret = Math.round(m.retNow * 100);
+
+    $('wd-word').textContent = w.word;
+    $('wd-meaning').textContent = w.meaning || '';
+    $('wd-level').textContent = LEVEL_LABEL[w.level] || '';
+    $('wd-stats').innerHTML = [
+        ['目前保留率', ret + '%'], ['答對次數', okN], ['答錯次數', badN],
+        ['記憶穩定度', (Math.round(m.last.S * 10) / 10) + ' 天'], ['加入時間', fmtDateTime(w.addedAt || now)], ['最近複習', m.events.length ? fmtDateTime(m.events[m.events.length - 1].t) : '尚未複習']
+    ].map(([k, v]) => `<div class="stat-card"><b style="font-size:${String(v).length > 7 ? 14 : 18}px">${esc(v)}</b><span>${k}</span></div>`).join('');
+
+    const due = m.nextT <= now;
+    $('wd-next').className = 'wd-next ' + (due ? 'due' : 'ok');
+    $('wd-next').innerHTML = due
+        ? `⚠️ 已到複習時間（已超過 ${fmtSpan(now - m.nextT)}）！記憶保留率約 ${ret}%，建議現在到練習模式複習。`
+        : `✅ 記憶還算穩固。建議在 <b>${fmtDateTime(m.nextT)}</b>（約 ${fmtSpan(m.nextT - now)}後）再複習。`;
+
+    $('wd-chart').innerHTML = memoryChart(w);
+
+    const rows = [...m.nodes].reverse().map(n => {
+        const tag = n.kind === 'add' ? '📌 加入錯題庫' : n.kind === 'ok' ? '✅ 答對' : '❌ 答錯';
+        const note = n.kind === 'add' ? '' : `穩定度 → ${Math.round(n.S * 10) / 10} 天`;
+        return `<div class="hist-row"><div><span class="m">${tag}</span></div><div class="r">${fmtDateTime(n.t)}${note ? '<br>' + note : ''}</div></div>`;
+    });
+    $('wd-history').innerHTML = rows.join('') + (m.events.length ? '' : '<div class="chart-empty" style="padding:10px 0">還沒有複習紀錄，去練習模式複習這個字吧！</div>');
+
+    $('wd-google').href = 'https://www.google.com/search?q=' + encodeURIComponent(w.word + ' 意思');
+    $('wd-cambridge').href = 'https://dictionary.cambridge.org/search/english-chinese-traditional/direct/?q=' + encodeURIComponent(w.word);
+}
+const closeWordDetail = () => { playClickSound(); currentDetailWord = null; showScreen('bank'); renderBank(); };
+$('btn-word-back').onclick = closeWordDetail;
+$('btn-word-back-top').onclick = closeWordDetail;
+$('btn-word-speak').onclick = () => { playClickSound(); if (currentDetailWord) speakWord(currentDetailWord); };
+$('btn-word-known').onclick = () => {
+    if (!currentDetailWord) return;
+    if (!confirm(`確定要把「${currentDetailWord}」移出錯題庫嗎？`)) return;
+    playClickSound();
+    removeFromBank(currentDetailWord);
+    closeWordDetail();
+};
 document.querySelectorAll('#bank-level-tabs .lb-tab').forEach(b => b.onclick = () => { playClickSound(); bankFilter = b.dataset.level; renderBank(); });
 $('bank-sort').onchange = e => { bankSort = e.target.value; renderBank(); };
 $('bank-search').oninput = e => { bankSearch = e.target.value; renderBank(); };
@@ -557,6 +714,7 @@ function renderWrongWordsReview(summaryHtml) {
         wrongQuestionsList.forEach(item => wrongWordsListEl.appendChild(createReviewCard(item)));
         updateAddAllBtn();
     }
+    if (btnPlayAgain) btnPlayAgain.style.display = currentMode === 'multi' ? 'none' : '';
     btnCloseReview.textContent = currentMode === 'multi' ? '🚪 返回房間大廳' : currentMode === 'practice' ? '返回主選單' : '確定並返回大廳';
     wrongWordsContainer.classList.remove('hidden');
 }
@@ -565,6 +723,12 @@ btnAddAllWrong.onclick = () => {
     playClickSound();
     wrongQuestionsList.forEach(addToBank);
     renderWrongWordsReview();
+};
+const btnPlayAgain = $('btn-play-again');
+btnPlayAgain.onclick = () => {
+    playClickSound();
+    if (currentMode === 'multi') return;
+    launchSingleGame(); // 沿用同一模式（排位 / 同一組練習題庫）直接重開
 };
 btnCloseReview.onclick = () => {
     playClickSound();
@@ -901,6 +1065,7 @@ function handleAnswer(selectedIndex) {
         if (!practice) { myCombo = 0; myHp = Math.max(0, myHp - 25); }
     }
     sessionMaxCombo = Math.max(sessionMaxCombo, myCombo);
+    recordBankReview(currentQuestion.word, ok);
     if (hasProfile()) Profile.recordAnswer(currentQuestion, ok, myCombo);
     flashWord(ok);
     updateComboUI(); updateStatsUI();
@@ -1015,7 +1180,7 @@ $('btn-practice-start').onclick = () => {
     launchSingleGame();
 };
 // 💡 請在此定義你當前「最新的使用說明內容版本號」（每次更新使用說明時，只要把版號改大即可）
-const CURRENT_HELP_VERSION = '20261022_v2';
+const CURRENT_HELP_VERSION = '20261023_v1';
 
 // 檢查並更新紅點顯示狀態
 function checkHelpBadge() {
@@ -1068,16 +1233,19 @@ btnCreateRoom.addEventListener('click', () => {
     initMultiplayerRoom(Math.floor(1000 + Math.random() * 9000).toString(), true);
 });
 
-btnJoinRoom.addEventListener('click', () => {
-    playClickSound();
-    const code = roomCodeInput.value.trim();
-    if (code.length !== 4) { alert('請輸入正確的 4 碼房間代碼！'); return; }
+function joinRoomByCode(code) {
+    if (String(code).length !== 4) { alert('請輸入正確的 4 碼房間代碼！'); return; }
     if (playerNameInput.value.trim()) playerName = playerNameInput.value.trim();
     isHost = false;
-    initMultiplayerRoom(code, false);
+    initMultiplayerRoom(String(code), false);
+}
+btnJoinRoom.addEventListener('click', () => {
+    playClickSound();
+    joinRoomByCode(roomCodeInput.value.trim());
 });
 
-function initMultiplayerRoom(roomCode, isCreating) {
+// onReady：房間建立 / 加入成功後呼叫（好友邀請用）
+function initMultiplayerRoom(roomCode, isCreating, onReady) {
     const key = mySafeKey();
     currentRoomRef = firebase.database().ref('rooms/' + roomCode);
 
@@ -1087,6 +1255,7 @@ function initMultiplayerRoom(roomCode, isCreating) {
         showScreen('room');
         displayRoomCode.textContent = `#${roomCode}`;
         listenRoomData();
+        if (typeof onReady === 'function') onReady(roomCode);
     };
 
     if (isCreating) {
@@ -1163,8 +1332,8 @@ btnToggleReady.addEventListener('click', () => {
 
 btnStartGame.addEventListener('click', () => { playClickSound(); startMultiplayerRound(); });
 
-btnLeaveRoom.addEventListener('click', () => {
-    playClickSound();
+btnLeaveRoom.addEventListener('click', () => { playClickSound(); leaveRoomNow(); });
+function leaveRoomNow() {
     if (currentRoomRef) {
         currentRoomRef.child('players/' + mySafeKey()).remove();
         currentRoomRef.off();
@@ -1173,7 +1342,7 @@ btnLeaveRoom.addEventListener('click', () => {
     resetLocalGameState();
     showScreen('lobby');
     showMenu('main');
-});
+}
 
 function resetLocalGameState() {
     clearInterval(gameTimerInterval); clearInterval(secondCounterInterval);
@@ -1380,6 +1549,7 @@ function handleMultiplayerAnswer(selectedIndex) {
     }
 
     sessionMaxCombo = Math.max(sessionMaxCombo, myCombo);
+    recordBankReview(currentQuestion.word, isCorrect);
     if (hasProfile()) Profile.recordAnswer(currentQuestion, isCorrect, myCombo);
     flashWord(isCorrect);   // 與單人模式相同的綠框 / 紅框特效
     updateComboUI();
@@ -1452,3 +1622,27 @@ function floatText(text, cls, rowFlashCls) {
 }
 function triggerDamageEffect(n = 15) { floatText(`-${n}`, 'floating-damage', 'row-flash-damage'); }
 function triggerHealEffect(n = 10) { floatText(`+${n}`, 'floating-heal', 'row-flash-heal'); }
+
+// ℹ️ 關於我們與隱私權說明彈窗事件綁定
+    const btnAbout = $('btn-about');
+    if (btnAbout) {
+        btnAbout.onclick = () => {
+            playClickSound();
+            $('about-modal').classList.remove('hidden');
+        };
+    }
+    const btnAboutClose = $('btn-about-close');
+    if (btnAboutClose) {
+        btnAboutClose.onclick = () => {
+            playClickSound();
+            $('about-modal').classList.add('hidden');
+        };
+    }
+    const aboutModal = $('about-modal');
+    if (aboutModal) {
+        aboutModal.addEventListener('click', e => {
+            if (e.target.id === 'about-modal') {
+                aboutModal.classList.add('hidden');
+            }
+        });
+    }

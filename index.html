@@ -30,23 +30,25 @@
 
 
             <h1>英語單字King</h1>
-            <p class="subtitle">Vocabulary Battle Royale & Rank</p>
+            <p class="subtitle">記得使用瀏覽器開啟才會有紀錄喔！(可以加入主畫面)</p>
 
             <!-- 個人檔案小卡 -->
             <div id="profile-chip" class="profile-chip" title="開啟個人檔案">
                 <div class="avatar" id="chip-avatar">?</div>
                 <div>
-                    <div class="chip-name" id="chip-name">訪客</div>
+                    <div class="chip-name" id="chip-name">請輸入暱稱</div>
                     <div class="chip-sub" id="chip-sub">🏅 0 / 0 成就</div>
                 </div>
-                <span class="chip-arrow">›</span>
+                <span class="chip-arrow">></span>
             </div>
 
             <!-- 主選單 -->
             <div id="main-menu-options" class="menu-col">
                 <button id="btn-goto-single" class="btn btn-primary">單人遊戲</button>
                 <button id="btn-goto-multi" class="btn btn-sky">多人遊戲(測試版)</button>
-                <button id="btn-goto-profile" class="btn btn-secondary">👤 個人檔案與成就</button>
+                <button id="btn-goto-friends" class="btn btn-secondary" style="position: relative;">
+                    👥 我的好友 <span id="friends-badge" class="help-red-dot online-dot hidden">0</span>
+                </button>
                 <button id="btn-goto-bank" class="btn btn-secondary">📚 我的錯題庫</button>
                 <button id="btn-help" class="btn btn-secondary" style="position: relative;">
                     ❓ 使用說明 <span id="help-badge" class="help-red-dot hidden">NEW</span>
@@ -66,6 +68,14 @@
                 <div id="leaderboard-list" class="lb-list">
                     <div class="lb-empty">載入中...</div>
                 </div>
+            </div>
+            <!-- 資訊與版權宣告 -->
+            <div style="text-align: center; margin-top: 8px;">
+                <button id="btn-about" class="btn-link">關於我們與隱私權說明</button>
+            </div>
+            <div
+                style="text-align: center; font-size: 12px; color: var(--muted); margin-top: 10px; margin-bottom: 5px;">
+                © 2026 Vocab Battle Studio. All rights reserved.
             </div>
 
             <!-- 單人模式子選單 -->
@@ -132,6 +142,7 @@
                 <button id="btn-toggle-ready" class="btn btn-secondary" style="display: none;">✅ 準備就緒</button>
                 <!-- 房主：全員準備後才能開始 -->
                 <button id="btn-start-game" class="btn btn-primary">開始多人生存戰！</button>
+                <button id="btn-invite-friends" class="btn btn-sky">👥 邀請好友</button>
                 <button id="btn-leave-room" class="btn btn-danger">離開房間</button>
             </div>
         </div>
@@ -175,8 +186,10 @@
                         style="width: 100%; padding: 8px; margin-bottom: 10px;">全部加入我的錯題庫</button>
                     <div id="wrong-words-list" class="review-list">
                     </div>
+                    <button id="btn-play-again" class="btn btn-primary"
+                        style="width: 100%; margin-top: 12px; padding: 10px;">🔄 再來一次</button>
                     <button id="btn-close-review" class="btn btn-secondary"
-                        style="width: 100%; margin-top: 12px; padding: 8px;">確定並返回大廳</button>
+                        style="width: 100%; margin-top: 8px; padding: 8px;">確定並返回大廳</button>
                 </div>
             </div>
         </div>
@@ -225,6 +238,76 @@
             </div>
         </div>
 
+        <!-- ==================== 6. 我的好友 ==================== -->
+        <div id="friends-screen" class="screen hidden">
+            <div class="modal-header-row" style="display: flex; justify-content: space-between; align-items: center;">
+                <h1>👥 我的好友</h1>
+                <button id="btn-friends-close-top" class="btn btn-secondary btn-sm"
+                    style="padding: 6px 12px;">✕</button>
+            </div>
+
+            <div class="code-card">
+                <div class="code-label">我的玩家代碼（點擊複製）</div>
+                <button id="my-code-btn" class="code-value" title="點擊複製玩家代碼">------</button>
+                <div id="code-hint" class="code-hint">把代碼傳給朋友，他輸入後就能加你為好友</div>
+            </div>
+
+            <div class="input-group">
+                <label for="friend-code-input">新增好友（輸入對方的玩家代碼）</label>
+                <div class="row-gap">
+                    <input type="text" id="friend-code-input" placeholder="例如: K7M2QX" maxlength="8" autocomplete="off"
+                        autocapitalize="characters" spellcheck="false">
+                    <button id="btn-friend-add" class="btn btn-primary btn-sm">新增</button>
+                </div>
+                <div id="friend-add-status" class="fb-status" style="margin-top: 2px;"></div>
+            </div>
+
+            <h3 class="section-title">好友列表 <span id="friend-count"></span></h3>
+            <div id="friend-list" class="friend-list"></div>
+
+            <div class="btn-grid">
+                <button id="btn-friends-back" class="btn btn-secondary">返回主選單</button>
+            </div>
+        </div>
+
+        <!-- ==================== 7. 單字詳情 ==================== -->
+        <div id="word-screen" class="screen hidden">
+            <div class="modal-header-row" style="display: flex; justify-content: space-between; align-items: center;">
+                <button id="btn-word-back-top" class="btn btn-secondary btn-sm" style="padding: 6px 12px;">‹
+                    錯題庫</button>
+                <button id="btn-word-speak" class="btn btn-secondary btn-sm" style="padding: 6px 12px;"
+                    title="聽發音">🔊</button>
+            </div>
+            <div class="word-hero">
+                <div id="wd-word" class="wd-word">-</div>
+                <div id="wd-meaning" class="wd-meaning">-</div>
+                <span id="wd-level" class="lv-badge"></span>
+            </div>
+
+            <div class="stat-cards" id="wd-stats"></div>
+            <div id="wd-next" class="wd-next"></div>
+
+            <h3 class="section-title">🧠 記憶曲線（估算）</h3>
+            <div class="chart-box" id="wd-chart"></div>
+            <div class="wd-note">依艾賓浩斯遺忘曲線估算：每次答對，記憶會維持得更久；答錯則縮短。虛線是未來的預測，保留率掉到 70% 以下時建議複習。</div>
+
+            <h3 class="section-title">🕘 複習時間紀錄</h3>
+            <div class="hist-list" id="wd-history"></div>
+
+            <h3 class="section-title">🔎 查更多</h3>
+            <div class="link-row">
+                <a id="wd-google" class="btn btn-secondary link-btn" target="_blank" rel="noopener noreferrer">🔍 Google
+                    搜尋</a>
+                <a id="wd-cambridge" class="btn btn-sky link-btn" target="_blank" rel="noopener noreferrer">📖
+                    劍橋線上辭典</a>
+            </div>
+
+            <div class="btn-grid">
+                <button id="btn-word-known" class="btn btn-danger">✓ 我會了（移出錯題庫）</button>
+                <button id="btn-word-back" class="btn btn-secondary">返回錯題庫</button>
+            </div>
+        </div>
+
         <!-- ==================== 4. 我的錯題庫 ==================== -->
         <div id="bank-screen" class="screen hidden">
             <h1>📚 我的錯題庫</h1>
@@ -263,15 +346,15 @@
             <h2>❓ 使用說明</h2>
             <div class="help-content">
                 <!-- 新增：更新日誌區塊 -->
-                <h4>📢 最近更新</h4>
+                <h4>📢 最近更新 (請往下滑查看基本說明) </h4>
                 <ul>
+                    <li><b>2026/10/23 好友系統</b>：大廳「👥 我的好友」可複製自己的專屬玩家代碼、輸入對方代碼加好友，看到好友是否在線、最後上線時間，並能直接邀請好友加入多人房間。</li>
+                    <li><b>2026/10/23 單字詳情</b>：在錯題庫點擊單字，可查看加入與複習時間、估算的記憶曲線、建議複習時間，並一鍵前往Google或劍橋辭典。</li>
+                    <li><b>2026/10/23 再來一次</b>：單人模式結算畫面新增「 再來一次」。</li>
                     <li><b>2026/10/22 個人檔案</b>：可上傳頭像、更改暱稱，並查看累計答題、複習單字數、各級正確率、錯誤率歷史曲線與最近遊玩紀錄。</li>
                     <li><b>2026/10/22 成就系統</b>：連擊、生存、多人勝場、單字量、連續登入等 20 多個成就，解鎖時會跳出通知，並展示在個人檔案中。</li>
-                    <li><b>2026/10/22
-                            多人模式改版</b>：新增答對／答錯閃框特效與扣血、回血飄字；修正結束時血量顯示錯誤（淘汰者復活、返回房間後血條跳回滿血）；<b>贏家現在也會看到「勝利者是誰」的結算畫面與最終排名</b>。
-                    </li>
+                    <li><b>2026/10/22多人模式改版</b>：新增答對／答錯閃框特效與扣血、回血飄字；修正結束時血量顯示錯誤。</li>
                     <li><b>2026/10/22 深色模式</b>：重新設計為柔和的藍灰配色，降低刺眼感，所有畫面一致。</li>
-                    <li><b>2026/10/22 朗讀</b>：預設聲線改為 David（若裝置有此聲線）。</li>
                     <li><b>2026/10/22 報錯與建議</b>：在「⚙️ 設定」中新增回饋按鈕，訊息會寄到開發者信箱。</li>
                     <li><b>語音朗讀功能</b>：單人遊戲出題時會自動朗讀英文單字，錯題庫中也能隨時點擊 🔊 按鈕聆聽標準發音！</li>
                 </ul>
@@ -280,7 +363,7 @@
                     <li><b>排位賽</b>：4~6 級單字混合出題。血量會持續倒數，答對 +15 血、答錯 -25 血，血量歸零即結束。成績計入排行榜。</li>
                     <li><b>計分</b>：答對一題 5 分，每一個連擊 (Combo) 讓每題多賺 1%。畫面會即時顯示答對、答錯、總題數與錯誤率。</li>
                     <li><b>練習模式</b>：可複選 4 級、5 級、6 級、我的錯題庫。沒有血量、計時與連擊，想練多久都行，按「立即結算」結束。</li>
-                    <li><b>不確定功能</b>：若覺得這個單字不確定 可以先點擊題目 變成黃色代表之後會加入錯題庫 再次點擊以取消</li>
+                    <li><b>不確定功能</b>：若覺得這個單字不確定 可以先點擊題目，變成黃色代表之後會加入錯題庫，再次點擊以取消</li>
                 </ul>
                 <h4>👥 多人遊戲（最多 6 人）</h4>
                 <ul>
@@ -294,11 +377,19 @@
                     <li>每局結束後，在「本局錯題檢討」中把單字<b>向右滑動</b>即可加入錯題庫，或按「全部加入我的錯題庫」。</li>
                     <li>遊戲中點擊題目單字，可標記為「不熟」並列入本局檢討。</li>
                     <li>在錯題庫可依級數篩選、依字首或級數分組、搜尋單字；已經會的單字按「我會了」即可移除。</li>
+                    <li>點擊單字可進入詳情：複習時間、記憶曲線，以及 Google／劍橋辭典連結。</li>
                     <li>錯題庫存在你這台裝置的瀏覽器中。</li>
+                </ul>
+                <h4>👥 好友</h4>
+                <ul>
+                    <li>每位玩家都有專屬玩家代碼，點擊即可複製。朋友輸入你的代碼就能互相成為好友。</li>
+                    <li>好友列表會顯示線上狀態與最後上線時間。好友在線時可按「🎮 邀請」，系統會建立房間並通知對方，對方按「加入」就會進入房間。</li>
+                    <li>已在房間內時，可用房間畫面的「👥 邀請好友」邀請更多人。</li>
+                    <li>玩家代碼存在這台裝置的瀏覽器中，清除瀏覽器資料後會換新的代碼。</li>
                 </ul>
                 <h4>👤 個人檔案與成就</h4>
                 <ul>
-                    <li>大廳點擊頭像小卡或「個人檔案與成就」即可開啟；點頭像可上傳圖片（會自動裁成正方形並壓縮）。</li>
+                    <li>大廳點擊上方的頭像小卡即可開啟個人檔案；點頭像可上傳圖片（會自動裁成正方形並壓縮）。</li>
                     <li>所有個人紀錄與成就都存在你這台裝置的瀏覽器中，清除瀏覽器資料會一併消失。</li>
                     <li>頭像目前只會顯示在你自己的畫面，不會上傳到伺服器。</li>
                 </ul>
@@ -308,6 +399,28 @@
                 </ul>
             </div>
             <button id="btn-help-close" class="btn btn-primary" style="width: 100%; margin-top: 12px;">懂到</button>
+        </div>
+    </div>
+    
+    <!-- ℹ️ 關於我們與隱私權說明彈窗 -->
+    <div id="about-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <h2>關於我們與隱私權說明</h2>
+            <div class="help-content">
+                <h4>關於此網站</h4>
+                <p>「英語單字King」是一款結合生存競賽與個人學習的高中英文單字學習網頁遊戲，旨在透過輕鬆有趣的方式幫助學生練習與複習學測常見單字。</p>
+                
+                <h4>隱私權與資料儲存說明</h4>
+                <ul>
+                    <li><b>本地儲存 (LocalStorage)</b>：你的個人檔案、頭像、錯題庫、遊戲設定與最高紀錄，皆僅儲存在你當前使用的瀏覽器中，我們不會主動收集或外流你的個人隱私資料。</li>
+                    <li><b>雲端資料庫 (Firebase)</b>：多人遊戲房間與排行榜（生存秒數榜、分數榜）會透過 Google Firebase 進行即時同步，僅會記錄遊戲暱稱與成績分數。</li>
+                    <li><b>流量分析</b>：本站使用 Google Analytics (GA4) 來協助分析訪客流量與改善網站效能。</li>
+                </ul>
+
+                <h4>免責聲明</h4>
+                <p>本網站內容僅供學習與娛樂使用。若因瀏覽器清除資料導致個人遊戲紀錄遺失，恕無法復原，敬請見諒。</p>
+            </div>
+            <button id="btn-about-close" class="btn btn-primary" style="width: 100%; margin-top: 12px;">了解</button>
         </div>
     </div>
 
@@ -382,11 +495,24 @@
         </div>
     </div>
 
+    <!-- 👥 邀請好友彈窗 (房間內) -->
+    <div id="invite-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <h2>👥 邀請好友</h2>
+            <div id="invite-list" class="friend-list" style="overflow-y:auto; margin: 6px 0;"></div>
+            <button id="btn-invite-close" class="btn btn-secondary" style="width: 100%; margin-top: 8px;">關閉</button>
+        </div>
+    </div>
+
+    <!-- 📨 收到房間邀請 -->
+    <div id="invite-root"></div>
+
     <!-- 🏅 成就通知 -->
     <div id="toast-root"></div>
 
-    <script src="app.js?v=5"></script>
-    <script src="profile.js?v=1"></script>
+    <script src="app.js?v=6"></script>
+    <script src="profile.js?v=2"></script>
+    <script src="friends.js?v=1"></script>
 </body>
 
 </html>

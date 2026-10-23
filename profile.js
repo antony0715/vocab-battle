@@ -7,7 +7,7 @@ const Profile = (() => {
     const MODE = { ranked: '排位賽', practice: '練習', multi: '多人' };
 
     const fresh = () => ({
-        name: '', avatar: '', createdAt: Date.now(),
+        name: '請輸入暱稱', avatar: '', createdAt: Date.now(),
         stats: {
             games: 0, ranked: 0, practice: 0, multi: 0, multiWins: 0,
             questions: 0, correct: 0, wrong: 0, maxCombo: 0, playSeconds: 0,
@@ -65,7 +65,7 @@ const Profile = (() => {
     const S = () => data.stats;
     const ACH = [
         { id: 'first_game', icon: '🎮', name: '初次登場', desc: '完成第 1 局遊戲', test: () => S().games >= 1 },
-        { id: 'games10', icon: '🕹️', name: '常客', desc: '累計完成 10 局', test: () => S().games >= 10 },
+        { id: 'games10', icon: '✋', name: '易如反掌', desc: '累計完成 10 局', test: () => S().games >= 10 },
         { id: 'games50', icon: '🎖️', name: '資深玩家', desc: '累計完成 50 局', test: () => S().games >= 50 },
         { id: 'q100', icon: '✏️', name: '百題斬', desc: '累計答 100 題', test: () => S().questions >= 100 },
         { id: 'q500', icon: '📘', name: '五百題達人', desc: '累計答 500 題', test: () => S().questions >= 500 },
@@ -76,20 +76,20 @@ const Profile = (() => {
         { id: 'combo10', icon: '🔥', name: '連擊新手', desc: '單局連擊達 10', test: () => S().maxCombo >= 10 },
         { id: 'combo30', icon: '⚡', name: '連擊高手', desc: '單局連擊達 30', test: () => S().maxCombo >= 30 },
         { id: 'combo60', icon: '🌋', name: '連擊之王', desc: '單局連擊達 60', test: () => S().maxCombo >= 60 },
-        { id: 'survive60', icon: '⏱️', name: '撐過一分鐘', desc: '排位賽生存 60 秒', test: () => S().bestSurvive >= 60 },
+        { id: 'survive60', icon: '6️⃣7️⃣', name: '陸柒', desc: '排位賽生存 67 秒', test: () => S().bestSurvive >= 67 },
         { id: 'survive180', icon: '🛡️', name: '三分鐘硬漢', desc: '排位賽生存 180 秒', test: () => S().bestSurvive >= 180 },
         { id: 'survive300', icon: '🏔️', name: '五分鐘傳說', desc: '排位賽生存 300 秒', test: () => S().bestSurvive >= 300 },
-        { id: 'score100', icon: '⭐', name: '百分選手', desc: '排位賽單局 100 分', test: () => S().bestScore >= 100 },
+        { id: 'score100', icon: '💯', name: '百分選手', desc: '排位賽單局 100 分', test: () => S().bestScore >= 100 },
         { id: 'score300', icon: '🌟', name: '三百分大師', desc: '排位賽單局 300 分', test: () => S().bestScore >= 300 },
-        { id: 'flawless', icon: '💎', name: '零失誤', desc: '一局答 20 題以上且全對', test: () => S().flawless >= 1 },
+        { id: 'flawless', icon: '💎', name: '不可能的任務', desc: '一局答 20 題以上且全對', test: () => S().flawless >= 1 },
         { id: 'lv6_50', icon: '🧗', name: '六級挑戰者', desc: '答對 50 題 6 級單字', test: () => S().byLevel.level6.c >= 50 },
         { id: 'multi_play', icon: '👥', name: '初登擂台', desc: '完成 1 場多人對戰', test: () => S().multi >= 1 },
         { id: 'multi_win', icon: '🏆', name: '最後生還者', desc: '贏得 1 場多人對戰', test: () => S().multiWins >= 1 },
         { id: 'multi_win5', icon: '👑', name: '擂台霸主', desc: '贏得 5 場多人對戰', test: () => S().multiWins >= 5 },
-        { id: 'bank10', icon: '📝', name: '知錯能改', desc: '累計加入 10 個單字到錯題庫', test: () => S().bankAdded >= 10 },
-        { id: 'bank_clear10', icon: '✅', name: '洗刷錯題', desc: '累計從錯題庫移除 10 個單字', test: () => S().bankRemoved >= 10 },
+        { id: 'bank10', icon: '📝', name: '知錯能改', desc: '累計加入 30 個單字到錯題庫', test: () => S().bankAdded >= 30 },
+        { id: 'bank_clear10', icon: '✅', name: '我全都會', desc: '累計從錯題庫移除 30 個單字', test: () => S().bankRemoved >= 30 },
         { id: 'streak3', icon: '📅', name: '三日不輟', desc: '連續 3 天有練習', test: () => streak() >= 3 },
-        { id: 'streak7', icon: '🗓️', name: '七日修行', desc: '連續 7 天有練習', test: () => streak() >= 7 },
+        { id: 'streak7', icon: '🗓️', name: '七步成詩', desc: '連續 7 天有練習', test: () => streak() >= 7 },
         { id: 'avatar', icon: '🖼️', name: '有頭有臉', desc: '設定個人頭像', test: () => !!data.avatar },
         { id: 'feedback', icon: '💬', name: '熱心玩家', desc: '送出一則報錯或建議', test: () => S().feedbackSent >= 1 }
     ];
@@ -167,6 +167,7 @@ const Profile = (() => {
         const n = $('profile-name-input').value.trim();
         if (!n) return alert('暱稱不能是空白！');
         data.name = n; setPlayerName(n); flush(); render(); refreshChip();
+        if (typeof Friends !== 'undefined') Friends.syncName();
     }
     const getName = () => data.name;
 
@@ -294,14 +295,9 @@ const Profile = (() => {
             const keep = { name: data.name, avatar: data.avatar };
             data = { ...fresh(), ...keep }; flush(); render(); refreshChip();
         });
-        // 大廳暱稱輸入框：同步儲存，下次開啟自動帶入
-        if (typeof playerNameInput !== 'undefined' && playerNameInput) {
-            playerNameInput.value = data.name || '';
-            playerNameInput.addEventListener('input', () => {
-                const n = playerNameInput.value.trim();
-                if (n) { data.name = n; scheduleSave(); }
-                refreshChip();
-            });
+        // 如果有儲存過名字，確保 profile 的 name 有值
+        if (!data.name) {
+            data.name = '請輸入暱稱';
         }
         // 回饋
         click('btn-open-feedback', () => { $('btn-settings-close').click(); setFbStatus(''); $('feedback-modal').classList.remove('hidden'); });
