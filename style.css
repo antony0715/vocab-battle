@@ -586,10 +586,8 @@ html.short-screen h1 { font-size: 20px; }
 .mj-lv button { flex: 1; padding: 8px 4px; border-radius: 10px; border: 1px solid var(--border-2); background: var(--card); color: var(--muted-2); font-weight: 700; cursor: pointer; }
 .mj-lv button.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 
-.game-container {
-  /* 自動適應手機瀏海與底線安全區 */
-  padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
-  min-height: 100vh;
-  min-height: calc(var(--vh, 1vh) * 100); /* 搭配 pwa.js 的動態高度 */
+
+/* 讓大廳畫面的標題上方留出空間 */
+#lobby-screen h1 {
+    margin-top: 20px; /* 數值可以根據你喜歡的距離自行調整（例如 15px 或 30px） */
 }
