@@ -31,8 +31,13 @@ body.dark-mode {
 
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans TC", sans-serif; }
 
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body {
-    background-color: var(--bg); color: var(--text); min-height: 100vh;
+    background-color: var(--bg); color: var(--text);
+    min-height: 100vh; min-height: 100dvh; min-height: calc(var(--vh, 1vh) * 100); /* 手機網址列伸縮時也貼合可視高度 */
+    /* 瀏海 / 圓角 / 手勢列：從主畫面或全螢幕開啟時自動避開 */
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    touch-action: manipulation; -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none;
     display: flex; justify-content: center; align-items: center;
     transition: background-color 0.25s, color 0.25s;
 }
@@ -279,7 +284,7 @@ body.dark-mode .option-btn { color: var(--text); }
 .ach .ds { font-size: 11px; color: var(--muted); margin-top: 1px; line-height: 1.35; }
 .ach.done { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 10%, var(--surface)); }
 .ach.locked { opacity: 0.55; } .ach.locked .ic { filter: grayscale(1); }
-#toast-root { position: fixed; top: 16px; left: 0; right: 0; z-index: 3000; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
+#toast-root { position: fixed; top: calc(16px + env(safe-area-inset-top)); left: 0; right: 0; z-index: 3000; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
 .toast { background: var(--card); color: var(--text); border: 1px solid var(--warn); border-radius: 14px; padding: 10px 16px; box-shadow: var(--shadow); font-size: 14px; display: flex; gap: 10px; align-items: center; animation: toastIn 0.35s ease, toastOut 0.4s ease 3s forwards; }
 .toast b { color: var(--heading); }
 @keyframes toastIn { from { transform: translateY(-20px); opacity: 0; } to { transform: none; opacity: 1; } }
@@ -325,7 +330,7 @@ body.dark-mode .option-btn { color: var(--text); }
 .fr-invite:disabled { background: var(--border); color: var(--faint); cursor: not-allowed; }
 .fr-del { border: none; background: none; color: var(--faint); font-size: 14px; cursor: pointer; padding: 6px; border-radius: 6px; }
 .fr-del:hover { color: var(--bad-text); background: var(--bad-soft); }
-#invite-root { position: fixed; top: 76px; left: 0; right: 0; z-index: 3100; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; padding: 0 12px; }
+#invite-root { position: fixed; top: calc(76px + env(safe-area-inset-top)); left: 0; right: 0; z-index: 3100; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; padding: 0 12px; }
 .invite-card { pointer-events: auto; width: 100%; max-width: 420px; background: var(--card); color: var(--text); border: 2px solid var(--accent); border-radius: 14px; padding: 12px 14px; box-shadow: var(--shadow); display: flex; align-items: center; justify-content: space-between; gap: 10px; animation: toastIn 0.35s ease; }
 .iv-text { font-size: 14px; line-height: 1.45; } .iv-text b { color: var(--heading); }
 .iv-btns { display: flex; gap: 6px; flex-shrink: 0; }
@@ -377,7 +382,7 @@ body.dark-mode .mj { color: var(--text); background: linear-gradient(#0a111f 0%,
 #mj-toast.on { opacity: 1; }
 
 /* --- 牌桌 --- */
-.mj-game { position: relative; height: 100%; overflow: hidden; --tw: 46px; --th: 64px; --g: 2px; --pw: 22px; --ph: 29px; --hh: 90px; }
+.mj-game { position: relative; height: 100%; overflow: hidden; margin: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left); --tw: 46px; --th: 64px; --g: 2px; --pw: 22px; --ph: 29px; --hh: 90px; }
 .mj-felt { position: absolute; inset: 4px; border: 5px solid #8a5a2b; border-radius: 16px; background: radial-gradient(ellipse at center, #34808f 0%, #1f4e5f 100%); box-shadow: inset 0 0 28px #0009, 0 4px 12px #0005; }
 body.dark-mode .mj-felt { border-color: #4d3318; background: radial-gradient(ellipse at center, #1d5246 0%, #0d2b27 100%); }
 .mj-play { position: absolute; left: 10px; right: 10px; top: 8px; bottom: var(--hh); display: grid; grid-template-columns: 1fr 1.7fr 1fr; grid-template-rows: 1fr 1fr 1fr; gap: 3px; padding: 46px 62px 6px; }
@@ -410,11 +415,12 @@ body.dark-mode .mj-pc { background: #d9d6cc; }
 .mj-meld b.v { color: #dc2626; }
 
 /* 手牌區 */
-.mj-me { position: absolute; left: 0; right: 0; bottom: 0; height: var(--hh); padding: 0 max(8px, env(safe-area-inset-right)) max(4px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); display: flex; align-items: flex-end; background: rgba(15, 35, 45, .55); border-top: 2px solid #8a5a2b; z-index: 4; }
+/* 左右瀏海的空間由 .mj-game 的 margin 處理，這裡只留固定邊距，手牌才能精準平分寬度 */
+.mj-me { position: absolute; left: 0; right: 0; bottom: 0; height: var(--hh); padding: 0 8px max(4px, env(safe-area-inset-bottom)) 8px; display: flex; align-items: flex-end; background: rgba(15, 35, 45, .55); border-top: 2px solid #8a5a2b; z-index: 4; }
 body.dark-mode .mj-me { background: rgba(5, 12, 20, .72); border-top-color: #4d3318; }
-.mj-mebar { position: absolute; left: max(10px, env(safe-area-inset-left)); top: -52px; display: flex; align-items: center; gap: 6px; color: #fff; font-weight: 700; font-size: 12px; }
+.mj-mebar { position: absolute; left: 10px; top: -52px; display: flex; align-items: center; gap: 6px; color: #fff; font-weight: 700; font-size: 12px; }
 .mj-mebar b { background: #0007; border-radius: 8px; padding: 0 8px; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mj-float { position: absolute; right: max(10px, env(safe-area-inset-right)); top: -42px; display: flex; gap: 6px; align-items: center; }
+.mj-float { position: absolute; right: 10px; top: -42px; display: flex; gap: 6px; align-items: center; }
 .mj-float .btn { width: auto; margin: 0; padding: 6px 14px; font-size: 14px; }
 .mj-chip { background: #0008; color: #fff; border-radius: 10px; padding: 3px 10px; font-size: 12px; font-weight: 700; }
 .mj-row { position: relative; width: 100%; display: flex; justify-content: flex-start; align-items: flex-end; gap: var(--g); height: calc(var(--th) + 16px); padding-bottom: 4px; }
@@ -551,3 +557,31 @@ body.dark-mode .mj-cm { background: rgba(60, 70, 80, .22); border-color: #94a3b8
 .mj-opp.right { flex-direction: row-reverse; align-items: flex-start; }
 .mj-opp.right .mj-melds { flex-direction: column; align-items: flex-end; }
 .mj-opp.right .mj-callout { left: auto; right: 100%; margin: 0 8px 0 0; }
+
+/* 設定：背景音樂曲目選擇 */
+.bgm-pick { display: flex; gap: 8px; align-items: center; }
+.bgm-pick .select { flex: 1; min-width: 0; }
+.bgm-pick .btn { width: auto; white-space: nowrap; padding: 8px 12px; }
+
+/* ===== 加入主畫面 / 全螢幕適配 ===== */
+.install-btn { margin-top: 8px; padding: 7px 16px; border-radius: 999px; border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent-text); font-size: 13px; font-weight: 700; cursor: pointer; }
+.install-btn:active { transform: scale(.97); }
+.pwa-card { background: var(--card); color: var(--text); border-radius: 18px; padding: 18px 20px; width: min(92vw, 380px); display: flex; flex-direction: column; gap: 10px; box-shadow: var(--shadow); }
+.pwa-card ol { padding-left: 20px; line-height: 1.7; font-size: 14px; }
+.pwa-card .pwa-note { font-size: 12px; color: var(--muted-2); }
+.pwa-ic { font-size: 16px; }
+.standalone #btn-install { display: none; }
+@media (max-width: 520px) {
+    .game-container { margin: 8px; padding: 24px 16px; border-radius: 20px; }
+    html.standalone .game-container { margin: 6px; }
+}
+/* 橫放的手機（高度很矮）：縮小留白，內容才放得下 */
+html.short-screen .game-container { padding: 14px 16px; margin: 6px; }
+html.short-screen .screen { gap: 12px; }
+html.short-screen h1 { font-size: 20px; }
+.lb-tabs .lb-tab { padding: 8px 4px; font-size: 12.5px; }
+
+/* 麻將：電腦難度 */
+.mj-lv { display: flex; gap: 6px; align-items: center; justify-content: center; font-size: 13px; }
+.mj-lv button { flex: 1; padding: 8px 4px; border-radius: 10px; border: 1px solid var(--border-2); background: var(--card); color: var(--muted-2); font-weight: 700; cursor: pointer; }
+.mj-lv button.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }

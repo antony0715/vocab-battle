@@ -13,10 +13,18 @@ let gameSettings = JSON.parse(localStorage.getItem('vocab_game_settings')) || {
     speech: true,
     sound: true,
     volume: 1.0,
-    sfxVolume: 1.0, // 遊戲音效 / 背景音樂音量
+    sfxVolume: 1.0, // 遊戲音效音量
+    music: true,     // 背景音樂開關（和「遊戲音效」分開）
+    bgmVolume: 0.6,  // 背景音樂音量
+    bgmTrack: 1,     // 背景音樂曲目：1~N = bgm1.mp3 ~ bgmN.mp3
     voiceURI: '', // 空字串 = 自動使用 David（找不到則用英文預設聲線）
     darkMode: false // 預設關閉深色模式
 };
+
+// 舊版設定沒有「背景音樂」欄位：沿用原本的音效開關當作預設
+if (typeof gameSettings.music !== 'boolean') gameSettings.music = gameSettings.sound !== false;
+if (typeof gameSettings.bgmVolume !== 'number') gameSettings.bgmVolume = 0.6;
+if (typeof gameSettings.bgmTrack !== 'number' || gameSettings.bgmTrack < 1) gameSettings.bgmTrack = 1;
 
 function saveGameSettings() {
     localStorage.setItem('vocab_game_settings', JSON.stringify(gameSettings));
@@ -40,7 +48,7 @@ let wrongQuestionsList = []; // 本局錯題 [{word, correctMeaning, level, user
 let isCurrentQuestionMarked = false, markAddedNew = false;
 let lastSummaryHtml = '';
 let lbTab = 'time';
-const lbData = { time: [], score: [] };
+const lbData = { time: [], score: [], mj: [] };
 let sessionRecorded = false, sessionStart = 0, sessionMaxCombo = 0; // 個人檔案紀錄用
 let scoreboardFrozen = false, lastPlayersSnapshot = null;           // 多人結算後凍結計分板
 const hasProfile = () => typeof Profile !== 'undefined';
@@ -100,10 +108,9 @@ const hostSettingsPanel = $('host-settings-panel'), selectVocabLevel = $('select
 
 // ==================== 0. 音效與背景音樂系統 (Web Audio API) ====================
 let audioCtx = null;
-let bgmInterval = null;
 
 let masterGain = null;
-// 所有遊戲音效 / 背景音樂都經過這個總音量節點（設定中的「音效音量」）
+// 所有遊戲音效都經過這個總音量節點（設定中的「音效音量」）；背景音樂另外走 bgmOut()
 function sfxOut() {
     initAudio();
     if (!masterGain) { masterGain = audioCtx.createGain(); masterGain.connect(audioCtx.destination); }
@@ -252,44 +259,67 @@ function playClickSound() {
     } catch (e) { }
 }
 
-// 緊張背景音樂 (節奏動態加快)
-function startBGM() {
-    if (!gameSettings.sound) return;
+// ==================== 背景音樂（全域：所有畫面都會播放）====================
+// 曲目檔案：bgm1.mp3、bgm2.mp3、bgm3.mp3 …（放在和 index.html 同一個資料夾）。
+// 要加更多首：把 bgmN.mp3 放進資料夾，並把下面的 BGM_MAX 改成最大編號即可。
+// 找不到的檔案不會出現在選單；一首都沒有時就不播放背景音樂。
+// 瀏覽器規定要「使用者第一次點擊 / 觸碰」之後才能出聲，所以會在第一次操作時自動開始播放。
+const BGM_MAX = 3;
+const bgmAvail = {}; // { 1: true/false }
+let bgmWanted = false;   // 已經有過使用者操作（可以播放了）
+let bgmPreview = false;  // 設定視窗開著時，即使還沒開始也試聽
+let bgmEl = null, bgmGain = null, bgmPlaying = null; // bgmPlaying：目前播放的曲目編號
+const bgmVol = () => typeof gameSettings.bgmVolume === 'number' ? gameSettings.bgmVolume : 0.6;
+function bgmOut() { // 背景音樂專用的音量節點（和音效音量分開）
     initAudio();
-    stopBGM();
-    let beat = 0;
-
-    bgmInterval = setInterval(() => {
-        try {
-            const now = audioCtx.currentTime;
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-
-            osc.type = 'triangle';
-            const baseFreq = (beat % 2 === 0) ? 110 : 130.81;
-            osc.frequency.setValueAtTime(baseFreq, now);
-
-            gain.gain.setValueAtTime(0.04, now);
-            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
-
-            osc.connect(gain);
-            gain.connect(sfxOut());
-
-            osc.start(now);
-            osc.stop(now + 0.25);
-            beat++;
-        } catch (e) { }
-    }, 400);
+    if (!bgmGain) { bgmGain = audioCtx.createGain(); bgmGain.connect(audioCtx.destination); }
+    bgmGain.gain.value = bgmVol();
+    return bgmGain;
 }
-
-function stopBGM() {
-    if (bgmInterval) {
-        clearInterval(bgmInterval);
-        bgmInterval = null;
+function setBgmVolume() {
+    if (bgmGain) bgmGain.gain.value = bgmVol();
+    if (bgmEl && bgmEl._direct) bgmEl.volume = Math.min(1, bgmVol());
+}
+function probeBGM() { // 檢查哪些 bgmN.mp3 真的存在
+    for (let n = 1; n <= BGM_MAX; n++) {
+        const t = new Audio(); t.preload = 'metadata';
+        t.onloadedmetadata = () => { bgmAvail[n] = true; if (typeof refreshBgmSelect === 'function') refreshBgmSelect(); applyBGM(); };
+        t.onerror = () => { bgmAvail[n] = false; if (typeof refreshBgmSelect === 'function') refreshBgmSelect(); applyBGM(); };
+        t.src = `bgm${n}.mp3`;
     }
 }
-
-
+function haltBGM() { if (bgmEl) { try { bgmEl.pause(); } catch (e) { } } bgmPlaying = null; }
+function pickBGMTrack() { // 選到的那首；不存在就改播第一首找得到的；都沒有則 null
+    const want = gameSettings.bgmTrack;
+    if (want >= 1 && want <= BGM_MAX && bgmAvail[want] !== false) return want;
+    for (let n = 1; n <= BGM_MAX; n++) if (bgmAvail[n]) return n;
+    return null;
+}
+function playBGMFile(t) {
+    initAudio();
+    const out = bgmOut();
+    if (!bgmEl) {
+        bgmEl = new Audio(); bgmEl.loop = true; bgmEl.preload = 'auto';
+        // 走 Web Audio 才能在 iPhone 上調整音量；不支援時退回直接設定 audio.volume
+        try { audioCtx.createMediaElementSource(bgmEl).connect(out); } catch (e) { bgmEl._direct = true; bgmEl.volume = Math.min(1, bgmVol()); }
+    }
+    bgmEl.onerror = () => { bgmAvail[t] = false; if (typeof refreshBgmSelect === 'function') refreshBgmSelect(); if (bgmPlaying === t) { bgmPlaying = null; applyBGM(); } };
+    bgmEl.src = `bgm${t}.mp3`;
+    bgmPlaying = t;
+    const p = bgmEl.play(); if (p && p.catch) p.catch(() => { }); // 還沒有使用者操作時會被瀏覽器擋下，之後第一次操作會再試
+}
+function applyBGM() { // 依目前的設定與狀態，決定要播哪一首（或停止）
+    if (!gameSettings.music || !(bgmWanted || bgmPreview) || document.hidden) return haltBGM();
+    const t = pickBGMTrack();
+    if (t == null) return haltBGM();
+    if (bgmPlaying === t && bgmEl) { if (bgmEl.paused) { const p = bgmEl.play(); if (p && p.catch) p.catch(() => { }); } return; }
+    haltBGM(); playBGMFile(t);
+}
+function startBGM() { bgmWanted = true; applyBGM(); }
+function stopBGM() { /* 背景音樂是全域的：答題 / 遊戲結束都不再停止，想關閉請到設定 */ }
+document.addEventListener('visibilitychange', applyBGM); // 切到別的分頁 / App 時暫停，回來繼續
+['pointerdown', 'keydown', 'touchend'].forEach(ev => window.addEventListener(ev, startBGM, { once: true, capture: true })); // 第一次操作後開始播放
+probeBGM();
 // ==================== 1. Firebase 與單字庫 ====================
 const firebaseConfig = {
     databaseURL: "https://vocab-battle-game-default-rtdb.asia-southeast1.firebasedatabase.app/"
@@ -297,6 +327,7 @@ const firebaseConfig = {
 if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const dbRef = firebase.database().ref('leaderboard');            // 生存秒數榜
 const scoreRef = firebase.database().ref('leaderboard_score');   // 分數榜
+const mjRef = firebase.database().ref('leaderboard_mj');         // 麻將台數榜（單局最高台數）
 
 // 💡 新增：自動監聽分頁切換，切到背景時中斷 Firebase 連線，切回時重新連線
 function manageFirebaseVisibility() {
@@ -742,7 +773,7 @@ function renderLeaderboard() {
     const el = $('leaderboard-list');
     if (!el) return;
     const list = lbData[lbTab];
-    const unit = lbTab === 'time' ? '秒' : '分';
+    const unit = lbTab === 'time' ? '秒' : lbTab === 'mj' ? '台' : '分';
     if (!list || !list.length) {
         el.innerHTML = '<div class="lb-empty">載入中...</div>';
         return;
@@ -755,7 +786,8 @@ function renderLeaderboard() {
 }
 
 // 排行榜只在進入網頁時讀取一次（once），之後要按「🔄」才會重新抓，不持續監聽，避免佔用資源
-let lbLoaded = { time: false, score: false }, lbRefreshing = false;
+let lbLoaded = { time: false, score: false, mj: false }, lbRefreshing = false;
+const lbRefs = () => ({ time: dbRef, score: scoreRef, mj: mjRef });
 function loadBoard(ref, key) {
     return ref.once('value').then(snap => {
         const data = snap.val();
@@ -775,7 +807,7 @@ loadBoard(scoreRef, 'score');
         e.stopPropagation(); playClickSound();
         if (lbRefreshing) return;
         lbRefreshing = true; btn.classList.add('spin'); btn.disabled = true;
-        await Promise.all([loadBoard(dbRef, 'time'), loadBoard(scoreRef, 'score')]);
+        await Promise.all(Object.entries(lbRefs()).filter(([k]) => k === 'time' || k === 'score' || lbLoaded[k] || lbTab === k).map(([k, r]) => loadBoard(r, k)));
         setTimeout(() => { lbRefreshing = false; btn.classList.remove('spin'); btn.disabled = false; }, 1200);
     };
 })();
@@ -783,7 +815,7 @@ loadBoard(scoreRef, 'score');
 document.querySelectorAll('.lb-tabs .lb-tab').forEach(b => b.onclick = () => {
     playClickSound();
     lbTab = b.dataset.tab;
-    if (!lbLoaded[lbTab]) loadBoard(lbTab === 'time' ? dbRef : scoreRef, lbTab); // 第一次沒讀到時才補讀
+    if (!lbLoaded[lbTab]) loadBoard(lbRefs()[lbTab], lbTab); // 還沒讀過（例如麻將台數榜）才讀一次
     document.querySelectorAll('.lb-tabs .lb-tab').forEach(x => x.classList.toggle('active', x === b));
     updateBestTimeUI();
     renderLeaderboard();
@@ -799,7 +831,7 @@ function uploadRecord(ref, name, value) {
         if (err) return console.error('成績上傳失敗：', err);
         if (!committed) return;
         // 不再監聽，所以自己把新成績更新到本機榜單
-        const k = ref === dbRef ? 'time' : 'score';
+        const k = ref === dbRef ? 'time' : ref === mjRef ? 'mj' : 'score';
         lbData[k] = (lbData[k] || []).filter(x => x.name !== name).concat({ name, score: value }).sort((a, b) => b.score - a.score);
         renderLeaderboard();
     });
@@ -1003,6 +1035,7 @@ window.addEventListener('DOMContentLoaded', () => {
         $('setting-darkmode').checked = !!gameSettings.darkMode;
         $('setting-speech').checked = gameSettings.speech;
         $('setting-sound').checked = gameSettings.sound;
+        syncMusicUI();
         populateVoiceList();
         const voiceSelect = $('setting-speech-voice');
         if (voiceSelect) voiceSelect.value = gameSettings.voiceURI || '';
@@ -1018,54 +1051,53 @@ window.addEventListener('DOMContentLoaded', () => {
         if (Date.now() - settingsOpenedAt < 500) { e.stopImmediatePropagation(); e.preventDefault(); }
     }, true);
 
-    // 點擊關閉並儲存設定
-    $('btn-settings-close').onclick = () => {
+    // ---- 背景音樂設定：開關 / 音量 / 換首（設定視窗開著時會試聽） ----
+    const musicChk = $('setting-music'), bgmVolInput = $('setting-bgm-volume'), bgmVolText = $('bgm-volume-val');
+    const bgmSel = $('setting-bgm-track'), bgmNext = $('btn-bgm-next');
+    window.refreshBgmSelect = () => { // 只列出存在的曲目
+        if (!bgmSel) return;
+        let h = '';
+        for (let n = 1; n <= BGM_MAX; n++) if (bgmAvail[n]) h += `<option value="${n}">背景音樂 ${n}</option>`;
+        bgmSel.innerHTML = h || '<option value="">（找不到 bgm1.mp3 ~ bgm' + BGM_MAX + '.mp3）</option>';
+        bgmSel.disabled = !h;
+        if (h) bgmSel.value = String(pickBGMTrack() || '');
+        if (bgmNext) bgmNext.disabled = bgmSel.options.length < 2 || !h;
+    };
+    window.syncMusicUI = () => {
+        if (musicChk) musicChk.checked = gameSettings.music;
+        if (bgmVolInput && bgmVolText) { const p = Math.round(bgmVol() * 100); bgmVolInput.value = p; bgmVolText.textContent = p; }
+        refreshBgmSelect();
+    };
+    const previewBGM = () => { bgmPreview = !$('settings-modal').classList.contains('hidden'); applyBGM(); };
+    if (musicChk) musicChk.onchange = () => { gameSettings.music = musicChk.checked; previewBGM(); };
+    if (bgmVolInput && bgmVolText) bgmVolInput.oninput = () => { bgmVolText.textContent = bgmVolInput.value; gameSettings.bgmVolume = Number(bgmVolInput.value) / 100; setBgmVolume(); if (gameSettings.music) previewBGM(); };
+    if (bgmSel) bgmSel.onchange = () => { if (!bgmSel.value) return; gameSettings.bgmTrack = Number(bgmSel.value); haltBGM(); previewBGM(); };
+    if (bgmNext) bgmNext.onclick = () => { // 換下一首（循環）
+        playClickSound();
+        const vals = [...bgmSel.options].map(o => o.value), i = vals.indexOf(bgmSel.value);
+        bgmSel.value = vals[(i + 1) % vals.length];
+        bgmSel.onchange();
+    };
+
+    // ---- 儲存並關閉設定（按鈕 / 點背景遮罩共用） ----
+    const saveSettingsFromUI = () => {
         gameSettings.darkMode = $('setting-darkmode').checked;
         applyDarkMode(gameSettings.darkMode); // 即時套用
         gameSettings.speech = $('setting-speech').checked;
         gameSettings.sound = $('setting-sound').checked;
         const voiceSelect = $('setting-speech-voice');
-        if (voiceSelect) {
-            gameSettings.voiceURI = voiceSelect.value;
-        }
-        if (volInput) {
-            gameSettings.volume = Number(volInput.value) / 100; // 將 0~100 轉為 0.0~1.0
-        }
+        if (voiceSelect) gameSettings.voiceURI = voiceSelect.value;
+        if (volInput) gameSettings.volume = Number(volInput.value) / 100; // 將 0~100 轉為 0.0~1.0
         if (sfxInput) gameSettings.sfxVolume = Number(sfxInput.value) / 100;
+        if (musicChk) gameSettings.music = musicChk.checked;
+        if (bgmVolInput) gameSettings.bgmVolume = Number(bgmVolInput.value) / 100;
+        if (bgmSel && bgmSel.value) gameSettings.bgmTrack = Number(bgmSel.value);
         saveGameSettings();
-
-        if (!gameSettings.sound) {
-            stopBGM();
-        }
-
         $('settings-modal').classList.add('hidden');
+        bgmPreview = false; applyBGM(); // 結束試聽（遊戲進行中則繼續播放選好的那首）
     };
-
-    // 點擊背景遮罩關閉並儲存設定
-    $('settings-modal').addEventListener('click', e => {
-        if (e.target.id === 'settings-modal') {
-            gameSettings.speech = $('setting-speech').checked;
-            gameSettings.sound = $('setting-sound').checked;
-
-            // 1. 聲線與音量
-            const voiceSelect = $('setting-speech-voice');
-            if (voiceSelect) gameSettings.voiceURI = voiceSelect.value;
-            if (volInput) gameSettings.volume = Number(volInput.value) / 100;
-            if (sfxInput) gameSettings.sfxVolume = Number(sfxInput.value) / 100;
-
-            // 2. 深色模式
-            gameSettings.darkMode = $('setting-darkmode').checked;
-            applyDarkMode(gameSettings.darkMode); // 👈 即時套用深色模式
-
-            saveGameSettings();
-
-            if (!gameSettings.sound) {
-                stopBGM();
-            }
-
-            $('settings-modal').classList.add('hidden');
-        }
-    });
+    $('btn-settings-close').onclick = saveSettingsFromUI;
+    $('settings-modal').addEventListener('click', e => { if (e.target.id === 'settings-modal') saveSettingsFromUI(); });
 
     initVocabPool();
     updateBestTimeUI();
@@ -1840,22 +1872,30 @@ function triggerHealEffect(n = 10) { floatText(`+${n}`, 'floating-heal', 'row-fl
     }
 
 // ==================== ⛶ 全螢幕（設定內）====================
+// Android / 桌面：用瀏覽器的全螢幕 API；iPhone Safari 沒有網頁全螢幕 API，改引導「加入主畫面」（從主畫面開啟就是全螢幕）。
+// 進入 / 離開全螢幕、轉向後，會重新計算可視高度（pwa.js 的 --vh），所有畫面（含麻將）會跟著調整。
 (function () {
     const btn = $('btn-fullscreen'); if (!btn) return;
     const de = document.documentElement;
     const req = de.requestFullscreen || de.webkitRequestFullscreen;
     const isFs = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
-    const refresh = () => { btn.textContent = isFs() ? '⛶ 離開全螢幕' : '⛶ 進入全螢幕'; };
+    const standalone = () => typeof PWA !== 'undefined' && PWA.standalone();
+    const refresh = () => {
+        if (standalone()) { btn.textContent = '⛶ 已是全螢幕（主畫面模式）'; btn.disabled = true; return; }
+        if (!req) { btn.textContent = '⛶ 全螢幕（加入主畫面）'; return; }
+        btn.textContent = isFs() ? '⛶ 離開全螢幕' : '⛶ 進入全螢幕';
+    };
     btn.onclick = () => {
         playClickSound();
-        if (!req) { alert('這個瀏覽器不支援全螢幕（iPhone 建議使用「加入主畫面」來獲得全螢幕效果）。'); return; }
+        if (standalone()) return;
+        if (!req) { if (typeof PWA !== 'undefined') PWA.guide(); return; } // iPhone：引導加入主畫面
         if (isFs()) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
         else {
-            const p = req.call(de);
-            if (p && p.catch) p.catch(() => alert('無法進入全螢幕，請稍後再試。'));
+            const p = req.call(de, { navigationUI: 'hide' });
+            if (p && p.catch) p.catch(() => { if (typeof PWA !== 'undefined') PWA.guide(); });
+            // Android：全螢幕後鎖定成目前的方向可避免誤轉（不支援的瀏覽器會忽略）
         }
     };
-    document.addEventListener('fullscreenchange', refresh);
-    document.addEventListener('webkitfullscreenchange', refresh);
+    ['fullscreenchange', 'webkitfullscreenchange'].forEach(ev => document.addEventListener(ev, () => { refresh(); window.dispatchEvent(new Event('resize')); }));
     refresh();
 })();

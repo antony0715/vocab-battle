@@ -12,9 +12,17 @@
         gtag('config', 'G-HSQHWFE2MD');
     </script>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#3b82f6">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="單字King">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <link rel="icon" type="image/png" href="icon-192.png">
     <title>英語單字King-Vocabulary Battle Royale</title>
-    <link rel="stylesheet" href="style.css?v=9">
+    <link rel="stylesheet" href="style.css?v=11">
 
     <!-- Firebase SDK (Realtime Database) -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -30,10 +38,9 @@
 
 
             <h1>英語單字King</h1>
-            <p class="subtitle">記得使用瀏覽器開啟才會有紀錄喔！(可以加入主畫面)
-            </p>
-            <p class="subtitle"> (設定全螢幕以獲得最佳體驗)
-            </p>
+            <p class="subtitle">記得使用瀏覽器開啟才會有紀錄喔！<br><button id="btn-install" class="install-btn" type="button">📲
+                    一鍵加入主畫面</button></p>
+
             <!-- 個人檔案小卡 -->
             <div id="profile-chip" class="profile-chip" title="開啟個人檔案">
                 <div class="avatar" id="chip-avatar">?</div>
@@ -47,8 +54,8 @@
             <!-- 主選單 -->
             <div id="main-menu-options" class="menu-col">
                 <button id="btn-goto-single" class="btn btn-primary">單人遊戲</button>
-                <button id="btn-goto-multi" class="btn btn-sky">多人遊戲(測試版)</button>
-                <button id="btn-goto-mj" class="btn btn-sky">🀄 英文麻將(測試版)</button>
+                <button id="btn-goto-mj" class="btn btn-sky">🀄 英文麻將</button>
+                <button id="btn-goto-multi" class="btn btn-sky">多人生存(測試版)</button>
                 <button id="btn-goto-friends" class="btn btn-secondary" style="position: relative;">
                     👥 我的好友 <span id="friends-badge" class="help-red-dot online-dot hidden">0</span>
                 </button>
@@ -68,6 +75,7 @@
                 <div class="lb-tabs">
                     <button class="lb-tab active" data-tab="time">⏱️ 生存秒數榜</button>
                     <button class="lb-tab" data-tab="score">⭐ 分數榜</button>
+                    <button class="lb-tab" data-tab="mj">🀄 麻將榜</button>
                 </div>
                 <div id="leaderboard-list" class="lb-list">
                     <div class="lb-empty">載入中...</div>
@@ -75,7 +83,7 @@
             </div>
             <!-- 單人模式子選單 -->
             <div id="single-mode-menu" class="submenu hidden">
-                <button id="btn-start-ranked" class="btn btn-primary">排位賽模式
+                <button id="btn-start-ranked" class="btn btn-primary">生存模式
                     (4~5級字・計入排行榜)</button>
                 <button id="btn-start-practice" class="btn btn-sky">練習模式
                     (自選題庫・無壓力複習)</button>
@@ -132,6 +140,9 @@
                 </div>
                 <div style="text-align: center; font-size: 11px; color: var(--muted); margin-top: 4px;">
                     版權屬原著作者與財團法人大學入學考試中心基金會所有。
+                </div>
+                <div style="text-align: center; font-size: 11px; color: var(--muted); margin-top: 4px;">
+                    背景音樂來源:Chillpeach
                 </div>
 
 
@@ -214,7 +225,7 @@
                     <div id="wrong-words-list" class="review-list">
                     </div>
                     <button id="btn-play-again" class="btn btn-primary"
-                        style="width: 100%; margin-top: 12px; padding: 10px;">再來一局</button>
+                        style="width: 100%; margin-top: 12px; padding: 10px;">再來一次</button>
                     <button id="btn-back-bank" class="btn btn-sky"
                         style="width: 100%; margin-top: 8px; padding: 8px; display: none;">↩ 回到錯題庫</button>
                     <button id="btn-close-review" class="btn btn-secondary"
@@ -313,7 +324,7 @@
             <div class="stat-cards" id="wd-stats"></div>
             <div id="wd-next" class="wd-next"></div>
 
-            <h3 class="section-title">🧠 記憶曲線 </h3>
+            <h3 class="section-title">🧠 記憶曲線</h3>
             <div class="chart-box" id="wd-chart"></div>
             <div class="wd-note">依艾賓浩斯遺忘曲線估算：每次答對，記憶會維持得更久；答錯則縮短。虛線是未來的預測，保留率掉到 70% 以下時建議複習。</div>
 
@@ -400,11 +411,12 @@
                 <ul>
                     <li><b>多人對戰</b>：輸入 4 碼房間代碼或透過好友邀請加入。答題回血並攻擊對手，存活到最後者獲勝！</li>
                 </ul>
-                
+
             </div>
             <button id="btn-help-close" class="btn btn-primary" style="width: 100%; margin-top: 12px;">了解</button>
         </div>
     </div>
+
 
     <!-- ℹ️ 關於我們與隱私權說明彈窗 -->
     <div id="about-modal" class="modal-overlay hidden">
@@ -468,12 +480,33 @@
                 <h3 class="set-group" data-collapse="set_sound" data-cdefault="closed">🔊 音效</h3>
                 <div class="set-body">
                     <label class="check-row">
-                        <input type="checkbox" id="setting-sound" checked> 遊戲音效與背景音樂
+                        <input type="checkbox" id="setting-sound" checked> 遊戲音效（答題、按鈕、麻將）
                     </label>
                     <div class="set-field">
                         <label for="setting-sfx-volume" class="field-label">音效音量(<span
                                 id="sfx-volume-val">100</span>%)</label>
                         <input type="range" id="setting-sfx-volume" min="0" max="100" value="100">
+                    </div>
+                </div>
+
+                <h3 class="set-group" data-collapse="set_music" data-cdefault="closed">🎵 背景音樂</h3>
+                <div class="set-body">
+                    <label class="check-row">
+                        <input type="checkbox" id="setting-music" checked> 背景音樂
+                    </label>
+                    <div class="set-field">
+                        <label for="setting-bgm-volume" class="field-label">音樂音量(<span
+                                id="bgm-volume-val">60</span>%)</label>
+                        <input type="range" id="setting-bgm-volume" min="0" max="100" value="60">
+                    </div>
+                    <div class="set-field">
+                        <label for="setting-bgm-track" class="field-label">曲目</label>
+                        <div class="bgm-pick">
+                            <select id="setting-bgm-track" class="select">
+                                <option value="">載入中…</option>
+                            </select>
+                            <button id="btn-bgm-next" class="btn btn-secondary" type="button">⏭ 下一首</button>
+                        </div>
                     </div>
                 </div>
 
@@ -553,11 +586,12 @@
     <!-- 🏅 成就通知 -->
     <div id="toast-root"></div>
 
-    <script src="app.js?v=13"></script>
+    <script src="app.js?v=15"></script>
+    <script src="pwa.js?v=1"></script>
     <script src="profile.js?v=6"></script>
     <script src="friends.js?v=3"></script>
     <script src="mahjong_words.js?v=1"></script>
-    <script src="mahjong.js?v=8"></script>
+    <script src="mahjong.js?v=9"></script>
 </body>
 
 </html>

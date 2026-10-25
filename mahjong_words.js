@@ -4,7 +4,7 @@
 // 天氣自然、時間、學校、家裡、衣服、交通、地點、職業、常見形容詞與動詞等。
 // 之後想補字，直接把單字加進下面任一行（用空格隔開、全小寫）即可。
 const mjExtraWords = (`
-cat dog pig cow hen fox bat rat ant bee owl ape elk eel yak emu cub pup ram ewe lamb sheep horse mouse mice goat duck goose
+cat dog pig cow hen fox bat rat ant bee owl ape elk yak emu cub pup ram ewe lamb sheep horse mouse mice goat duck goose
 swan crow dove hawk eagle robin finch parrot lion tiger bear wolf deer frog toad snake lizard turtle shark whale seal otter
 beaver rabbit hare squirrel monkey zebra giraffe camel panda koala kangaroo hippo rhino moose bison buffalo donkey pony puppy
 kitten chick chicken rooster turkey peacock penguin ostrich crab fish trout salmon tuna squid octopus snail slug worm spider
@@ -41,5 +41,5 @@ run walk jump swim fly eat drink sleep sit stand come see look hear listen say t
 like want need use try work wash cook cut dig fix hug kick kiss laugh cry smile
 yes not and the for but you she her him his its our out all any can had has was are who why how now then than that this with from
 they them what when where which here there very too also just
-am an as at be by do go he hi if in is it me my no of oh on or ox so to up us we ah
+am an as at be by do go he hi if in is it me my no of oh on or ox so to up us we ah 
 `).split(/\s+/).filter(w => /^[a-z]{2,}$/.test(w));
