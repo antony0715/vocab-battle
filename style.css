@@ -585,3 +585,11 @@ html.short-screen h1 { font-size: 20px; }
 .mj-lv { display: flex; gap: 6px; align-items: center; justify-content: center; font-size: 13px; }
 .mj-lv button { flex: 1; padding: 8px 4px; border-radius: 10px; border: 1px solid var(--border-2); background: var(--card); color: var(--muted-2); font-weight: 700; cursor: pointer; }
 .mj-lv button.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+
+.game-container {
+  /* 自動適應手機瀏海與底線安全區 */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  min-height: 100vh;
+  min-height: calc(var(--vh, 1vh) * 100); /* 搭配 pwa.js 的動態高度 */
+}
