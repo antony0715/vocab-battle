@@ -1053,7 +1053,8 @@ const Mahjong = (() => {
             const beforeCov = split(d.before).segs.reduce((a, s) => a + s.len, 0), wasOk = cm && isWord(wordOf(cm.items));
             const inRow = idsIn($('mj-row')).filter(i => i !== 'D'), inCm = cm ? idsIn($('mj-cm-row')) : [];
             const known = new Set([...inRow, ...inCm]);
-            hand = [...inRow.filter(i => hand.includes(i)), ...hand.filter(i => !known.has(i))]; // 拖曳期間才摸到的牌接在最後面
+            const owned = new Set([...hand, ...(cm ? cm.items.filter(i => i !== 'D') : [])]); // 手牌 + 目前放在碰牌區的牌（從碰牌區拖回手牌區時，牌不在 hand 裡，不能被濾掉）
+            hand = [...inRow.filter(i => owned.has(i)), ...hand.filter(i => !known.has(i))]; // 拖曳期間才摸到的牌接在最後面
             if (cm) cm.items = inCm;
             const afterCov = split(hand).segs.reduce((a, s) => a + s.len, 0), nowOk = cm && isWord(wordOf(cm.items));
             const good = afterCov > beforeCov || (nowOk && !wasOk);

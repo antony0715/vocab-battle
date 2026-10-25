@@ -766,7 +766,10 @@ $('btn-back-bank').onclick = () => {
 function updateBestTimeUI() {
     const el = $('best-record-text');
     if (!el) return;
-    el.textContent = lbTab === 'time' ? `我的最高紀錄：${bestSurvivalSeconds} 秒` : `我的最高紀錄：${bestScore} 分`;
+    if (lbTab === 'mj') {
+        const t = (typeof Profile !== 'undefined' && Profile.getMjBestTai) ? Profile.getMjBestTai() : 0;
+        el.textContent = `我的最高紀錄：${t} 台`;
+    } else el.textContent = lbTab === 'time' ? `我的最高紀錄：${bestSurvivalSeconds} 秒` : `我的最高紀錄：${bestScore} 分`;
 }
 
 function renderLeaderboard() {

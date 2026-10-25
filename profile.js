@@ -351,5 +351,6 @@ const Profile = (() => {
     // app.js 的 DOMContentLoaded 會先呼叫 getName / refreshChip，所以這裡同樣在載入完成後綁定
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind); else bind();
 
-    return { recordAnswer, endSession, mjRecord, bankAdded, bankUndo, bankRemoved, getName, getThumb, refreshChip, render };
+    const getMjBestTai = () => MJ().bestTai || 0;
+    return { recordAnswer, endSession, mjRecord, getMjBestTai, bankAdded, bankUndo, bankRemoved, getName, getThumb, refreshChip, render };
 })();
