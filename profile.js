@@ -3,7 +3,8 @@
 const Profile = (() => {
     const KEY = 'vocab_profile_v1';
     const FEEDBACK_EMAIL = 'olololffee@gmail.com';
-    const LV = { level4: '4級', level5: '5級', level6: '6級' };
+    const LV = { level1: '1級', level2: '2級', level3: '3級', level4: '4級', level5: '5級', level6: '6級' };
+    const LEVELS = ['level1', 'level2', 'level3', 'level4', 'level5', 'level6'];
     const MODE = { ranked: '排位賽', practice: '練習', multi: '多人' };
 
     const fresh = () => ({
@@ -12,9 +13,10 @@ const Profile = (() => {
             games: 0, ranked: 0, practice: 0, multi: 0, multiWins: 0,
             questions: 0, correct: 0, wrong: 0, maxCombo: 0, playSeconds: 0,
             bestSurvive: 0, bestScore: 0, flawless: 0, bankAdded: 0, bankRemoved: 0, feedbackSent: 0,
-            byLevel: { level4: { c: 0, w: 0 }, level5: { c: 0, w: 0 }, level6: { c: 0, w: 0 } }
+            mj: { games: 0, wins: 0, zimo: 0, ron: 0, pong: 0, ting: 0, special: 0, bestTai: 0, longest: 0, soloWins: 0, multiWins: 0 },
+            byLevel: Object.fromEntries(['level1', 'level2', 'level3', 'level4', 'level5', 'level6'].map(l => [l, { c: 0, w: 0 }]))
         },
-        seen: {},      // 已複習過的不同單字 { word: 4|5|6 }
+        seen: {},      // 已複習過的不同單字 { word: '1'~'6' }
         days: [],      // 有遊玩的日期 YYYY-MM-DD
         history: [],   // 每局紀錄
         achievements: {} // { id: 解鎖時間 }
@@ -63,6 +65,7 @@ const Profile = (() => {
     // ---------- 成就定義 ----------
     const seenCount = () => Object.keys(data.seen).length;
     const S = () => data.stats;
+    const MJ = () => { const s = data.stats; s.mj = { games: 0, wins: 0, zimo: 0, ron: 0, pong: 0, ting: 0, special: 0, bestTai: 0, longest: 0, soloWins: 0, multiWins: 0, ...(s.mj || {}) }; return s.mj; };
     const ACH = [
         { id: 'first_game', icon: '🎮', name: '初次登場', desc: '完成第 1 局遊戲', test: () => S().games >= 1 },
         { id: 'games10', icon: '✋', name: '易如反掌', desc: '累計完成 10 局', test: () => S().games >= 10 },
@@ -90,7 +93,23 @@ const Profile = (() => {
         { id: 'bank_clear10', icon: '✅', name: '我全都會', desc: '累計從錯題庫移除 30 個單字', test: () => S().bankRemoved >= 30 },
         { id: 'streak3', icon: '📅', name: '三日不輟', desc: '連續 3 天有練習', test: () => streak() >= 3 },
         { id: 'streak7', icon: '🗓️', name: '七步成詩', desc: '連續 7 天有練習', test: () => streak() >= 7 },
+        { id: 'streak14', icon: '🗓️', name: '十四吃柿子', desc: '連續 14 天有練習', test: () => streak() >= 14 },
         { id: 'avatar', icon: '🖼️', name: '有頭有臉', desc: '設定個人頭像', test: () => !!data.avatar },
+        { id: 'mj_first', icon: '🀄', name: '初試牌桌', desc: '完成 1 場英文麻將', test: () => MJ().games >= 1 },
+        { id: 'mj_games10', icon: '🎲', name: '牌桌常客', desc: '累計完成 10 場英文麻將', test: () => MJ().games >= 10 },
+        { id: 'mj_win1', icon: '🏁', name: '胡啦!!!', desc: '在英文麻將胡牌 1 次', test: () => MJ().wins >= 1 },
+        { id: 'mj_win5', icon: '🏆', name: '手氣不斷', desc: '在英文麻將胡牌 5 次', test: () => MJ().wins >= 5 },
+        { id: 'mj_win20', icon: '👑', name: '字母牌神', desc: '在英文麻將胡牌 20 次', test: () => MJ().wins >= 20 },
+        { id: 'mj_zimo', icon: '🤲', name: 'touch myself', desc: '在英文麻將自摸 1 次', test: () => MJ().zimo >= 1 },
+        { id: 'mj_ron', icon: '🎯', name: '一擊必中', desc: '胡別人打出的牌 1 次', test: () => MJ().ron >= 1 },
+        { id: 'mj_pong10', icon: '💥', name: '碰碰車', desc: '累計碰牌成功 10 次', test: () => MJ().pong >= 10 },
+        { id: 'mj_ting10', icon: '👂', name: '你說什麼', desc: '累計宣告聽牌 10 次', test: () => MJ().ting >= 10 },
+        { id: 'mj_tai10', icon: '💰', name: '大台來了', desc: '英文麻將單局贏 10 台以上', test: () => MJ().bestTai >= 10 },
+        { id: 'mj_tai20', icon: '💎', name: '豪華大牌', desc: '英文麻將單局贏 20 台以上', test: () => MJ().bestTai >= 20 },
+        { id: 'mj_long7', icon: '📏', name: '火山矽肺病', desc: '胡牌時組出 7 個字母以上的單字', test: () => MJ().longest >= 7 },
+        { id: 'mj_special', icon: '🌠', name: '特殊胡法', desc: '以「出牌後（或碰牌後）手牌全成單字」胡牌', test: () => MJ().special >= 1 },
+        { id: 'mj_solo_win', icon: '🤖', name: 'AI就這?', desc: '單人練習中胡牌 1 次', test: () => MJ().soloWins >= 1 },
+        { id: 'mj_multi_win', icon: '🧑‍🤝‍🧑', name: '麻將擂台', desc: '多人麻將胡牌 1 次', test: () => MJ().multiWins >= 1 },
         { id: 'feedback', icon: '💬', name: '熱心玩家', desc: '送出一則報錯或建議', test: () => S().feedbackSent >= 1 }
     ];
 
@@ -136,7 +155,23 @@ const Profile = (() => {
         }
         markDay(); flush(); check();
     }
+    // 英文麻將：{ type:'end', win, self, ron, tai, longest, special, solo } / { type:'pong' } / { type:'ting' }
+    function mjRecord(ev) {
+        const m = MJ();
+        if (ev.type === 'pong') m.pong++;
+        else if (ev.type === 'ting') m.ting++;
+        else if (ev.type === 'end') {
+            m.games++;
+            if (ev.win) {
+                m.wins++; if (ev.self) m.zimo++; if (ev.ron) m.ron++; if (ev.special) m.special++;
+                m.bestTai = Math.max(m.bestTai, ev.tai || 0); m.longest = Math.max(m.longest, ev.longest || 0);
+                ev.solo ? m.soloWins++ : m.multiWins++;
+            }
+        }
+        markDay(); scheduleSave(); check();
+    }
     function bankAdded() { S().bankAdded++; scheduleSave(); check(); }
+    function bankUndo() { const s = S(); s.bankAdded = Math.max(0, s.bankAdded - 1); scheduleSave(); }
     function bankRemoved() { S().bankRemoved++; scheduleSave(); check(); }
 
     // ---------- 頭像 / 名稱 ----------
@@ -236,14 +271,6 @@ const Profile = (() => {
 
         $('profile-chart').innerHTML = trendChart();
 
-        $('profile-levels').innerHTML = ['level4', 'level5', 'level6'].map(l => {
-            const seen = Object.values(data.seen).filter(v => v === l.slice(-1)).length;
-            const pool = typeof getVocabByLevels === 'function' ? getVocabByLevels([l]).length : 0;
-            const pct = pool ? Math.min(100, Math.round(seen / pool * 100)) : 0;
-            return `<div><div class="lv-bar-top"><span>${LV[l]}</span><span>已學習 ${seen}${pool ? ' / ' + pool : ''} 字</span></div>
-                <div class="lv-bar"><div style="width:${pct}%"></div></div></div>`;
-        }).join('');
-
         const hist = data.history.slice(-8).reverse();
         $('profile-history').innerHTML = hist.length ? hist.map(h => {
             const d = new Date(h.t);
@@ -262,7 +289,7 @@ const Profile = (() => {
         }).join('');
     }
 
-    function open() { if (playerNameInput.value.trim() && !data.name) { /* 尚未命名時沿用大廳輸入 */ } check(); showScreen('profile'); render(); }
+    function open() { check(); showScreen('profile'); render(); if (typeof initCollapsibles === 'function') initCollapsibles(); }
 
     // ---------- 回饋 ----------
     function setFbStatus(msg, cls) { const el = $('fb-status'); el.textContent = msg; el.className = 'fb-status ' + (cls || ''); }
@@ -324,5 +351,5 @@ const Profile = (() => {
     // app.js 的 DOMContentLoaded 會先呼叫 getName / refreshChip，所以這裡同樣在載入完成後綁定
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind); else bind();
 
-    return { recordAnswer, endSession, bankAdded, bankRemoved, getName, getThumb, refreshChip, render };
+    return { recordAnswer, endSession, mjRecord, bankAdded, bankUndo, bankRemoved, getName, getThumb, refreshChip, render };
 })();

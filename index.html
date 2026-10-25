@@ -14,7 +14,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>英語單字King-Vocabulary Battle Royale</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=9">
 
     <!-- Firebase SDK (Realtime Database) -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -30,8 +30,10 @@
 
 
             <h1>英語單字King</h1>
-            <p class="subtitle">記得使用瀏覽器開啟才會有紀錄喔！(可以加入主畫面)</p>
-
+            <p class="subtitle">記得使用瀏覽器開啟才會有紀錄喔！(可以加入主畫面)
+            </p>
+            <p class="subtitle"> (設定全螢幕以獲得最佳體驗)
+            </p>
             <!-- 個人檔案小卡 -->
             <div id="profile-chip" class="profile-chip" title="開啟個人檔案">
                 <div class="avatar" id="chip-avatar">?</div>
@@ -46,7 +48,7 @@
             <div id="main-menu-options" class="menu-col">
                 <button id="btn-goto-single" class="btn btn-primary">單人遊戲</button>
                 <button id="btn-goto-multi" class="btn btn-sky">多人遊戲(測試版)</button>
-                <button id="btn-goto-mj" class="btn btn-sky">🀄 英文麻將(暫不開放)</button>
+                <button id="btn-goto-mj" class="btn btn-sky">🀄 英文麻將(測試版)</button>
                 <button id="btn-goto-friends" class="btn btn-secondary" style="position: relative;">
                     👥 我的好友 <span id="friends-badge" class="help-red-dot online-dot hidden">0</span>
                 </button>
@@ -59,7 +61,8 @@
             <!-- 🏆 全伺服器排行榜 -->
             <div id="global-leaderboard-card" class="lb-card">
                 <div class="lb-head">
-                    <span class="lb-title">🏆 全伺服器排行榜</span>
+                    <span class="lb-title">🏆 全伺服器排行榜 <button id="btn-lb-refresh" class="lb-refresh" title="重新載入排行榜"
+                            aria-label="重新載入排行榜">🔄</button></span>
                     <span id="best-record-text" class="best-text">我的最高紀錄：0 秒</span>
                 </div>
                 <div class="lb-tabs">
@@ -82,6 +85,9 @@
             <!-- 練習模式：選擇題庫 -->
             <div id="practice-setup-box" class="submenu hidden">
                 <p class="submenu-title">請選擇練習題庫（可複選）：</p>
+                <label class="check-row"><input type="checkbox" value="level1"> 1 級字</label>
+                <label class="check-row"><input type="checkbox" value="level2"> 2 級字</label>
+                <label class="check-row"><input type="checkbox" value="level3"> 3 級字</label>
                 <label class="check-row"><input type="checkbox" value="level4" checked> 4 級字</label>
                 <label class="check-row"><input type="checkbox" value="level5"> 5 級字</label>
                 <label class="check-row"><input type="checkbox" value="level6"> 6 級字</label>
@@ -89,6 +95,9 @@
                         id="practice-bank-count">0</span> 字)</label>
                 <div id="practice-bank-levels" class="sub-levels hidden">
                     <span>錯題範圍：</span>
+                    <label><input type="checkbox" data-bl value="level1" checked> 1級</label>
+                    <label><input type="checkbox" data-bl value="level2" checked> 2級</label>
+                    <label><input type="checkbox" data-bl value="level3" checked> 3級</label>
                     <label><input type="checkbox" data-bl value="level4" checked> 4級</label>
                     <label><input type="checkbox" data-bl value="level5" checked> 5級</label>
                     <label><input type="checkbox" data-bl value="level6" checked> 6級</label>
@@ -119,12 +128,12 @@
                     © 2026 Vocab Battle Studio. All rights reserved.
                 </div>
                 <div style="text-align: center; font-size: 11px; color: var(--muted); margin-top: 4px;">
-                    單字庫資料來源：財團法人大學入學考試中心基金會（僅供非營利教育使用）
+                    單字庫資料來源：財團法人大學入學考試中心基金會
                 </div>
                 <div style="text-align: center; font-size: 11px; color: var(--muted); margin-top: 4px;">
                     版權屬原著作者與財團法人大學入學考試中心基金會所有。
                 </div>
-                
+
 
             </div>
         </div>
@@ -142,7 +151,10 @@
                 <label class="field-label" for="select-vocab-level"
                     style="display:block; margin-bottom:4px;">單字範圍難度：</label>
                 <select id="select-vocab-level" class="select">
-                    <option value="all">全部單字 (4~6 級)</option>
+                    <option value="all">全部單字 (1~6 級)</option>
+                    <option value="level1">僅 1 級單字</option>
+                    <option value="level2">僅 2 級單字</option>
+                    <option value="level3">僅 3 級單字</option>
                     <option value="level4">僅 4 級單字</option>
                     <option value="level5">僅 5 級單字</option>
                     <option value="level6">僅 6 級單字</option>
@@ -196,13 +208,13 @@
                     <div id="result-summary"></div>
                     <h3 class="review-title">📖 本局錯題檢討</h3>
                     <p id="review-hint" class="review-hint">
-                        👉 將單字向右滑動即可加入「我的錯題庫」</p>
+                        👉 向右滑動加入「我的錯題庫」，向左滑動可取消</p>
                     <button id="btn-add-all-wrong" class="btn btn-primary"
                         style="width: 100%; padding: 8px; margin-bottom: 10px;">全部加入我的錯題庫</button>
                     <div id="wrong-words-list" class="review-list">
                     </div>
                     <button id="btn-play-again" class="btn btn-primary"
-                        style="width: 100%; margin-top: 12px; padding: 10px;">🔄 再來一次</button>
+                        style="width: 100%; margin-top: 12px; padding: 10px;">再來一局</button>
                     <button id="btn-back-bank" class="btn btn-sky"
                         style="width: 100%; margin-top: 8px; padding: 8px; display: none;">↩ 回到錯題庫</button>
                     <button id="btn-close-review" class="btn btn-secondary"
@@ -240,13 +252,10 @@
             <h3 class="section-title">📈 錯誤率變化（最近 20 局）</h3>
             <div class="chart-box" id="profile-chart"></div>
 
-            <h3 class="section-title">🎯 各級單字表現</h3>
-            <div class="lv-bars" id="profile-levels"></div>
-
-            <h3 class="section-title">🕘 最近紀錄</h3>
+            <h3 class="section-title" data-collapse="profile_history">🕘 最近紀錄</h3>
             <div class="hist-list" id="profile-history"></div>
 
-            <h3 class="section-title">🏅 成就 <span id="ach-count"></span></h3>
+            <h3 class="section-title" data-collapse="profile_ach"><span>🏅 成就 <span id="ach-count"></span></span></h3>
             <div class="ach-grid" id="profile-achievements"></div>
 
             <div class="btn-grid">
@@ -298,17 +307,17 @@
             <div class="word-hero">
                 <div id="wd-word" class="wd-word">-</div>
                 <div id="wd-meaning" class="wd-meaning">-</div>
-                <span id="wd-level" class="lv-badge"></span>
+                <span id="wd-pos" class="pos-badge"></span><span id="wd-level" class="lv-badge"></span>
             </div>
 
             <div class="stat-cards" id="wd-stats"></div>
             <div id="wd-next" class="wd-next"></div>
 
-            <h3 class="section-title">🧠 記憶曲線（估算）</h3>
+            <h3 class="section-title">🧠 記憶曲線 </h3>
             <div class="chart-box" id="wd-chart"></div>
             <div class="wd-note">依艾賓浩斯遺忘曲線估算：每次答對，記憶會維持得更久；答錯則縮短。虛線是未來的預測，保留率掉到 70% 以下時建議複習。</div>
 
-            <h3 class="section-title">🕘 複習時間紀錄</h3>
+            <h3 class="section-title" data-collapse="word_history">🕘 複習時間紀錄</h3>
             <div class="hist-list" id="wd-history"></div>
 
             <h3 class="section-title">🔎 查更多</h3>
@@ -328,13 +337,17 @@
         <!-- ==================== 4. 我的錯題庫 ==================== -->
         <div id="bank-screen" class="screen hidden">
             <h1>📚 我的錯題庫</h1>
+            <p class="subtitle">(點擊單字查看詳情)</p>
             <p class="subtitle" id="bank-count">共 0 個單字</p>
 
             <div class="bank-tabs" id="bank-level-tabs">
                 <button class="lb-tab active" data-level="all">全部</button>
-                <button class="lb-tab" data-level="level4">4 級</button>
-                <button class="lb-tab" data-level="level5">5 級</button>
-                <button class="lb-tab" data-level="level6">6 級</button>
+                <button class="lb-tab" data-level="level1">1級</button>
+                <button class="lb-tab" data-level="level2">2級</button>
+                <button class="lb-tab" data-level="level3">3級</button>
+                <button class="lb-tab" data-level="level4">4級</button>
+                <button class="lb-tab" data-level="level5">5級</button>
+                <button class="lb-tab" data-level="level6">6級</button>
             </div>
 
             <div class="bank-toolbar">
@@ -362,64 +375,34 @@
     <!-- ==================== 使用說明彈窗 ==================== -->
     <div id="help-modal" class="modal-overlay hidden">
         <div class="modal-card">
-            <h2>❓ 使用說明</h2>
+            <h2>❓ 遊戲說明</h2>
             <div class="help-content">
-                <!-- 新增：更新日誌區塊 -->
-                <h4>📢 最近更新 (請往下滑查看基本說明) </h4>
+                <h4>📢 最新亮點</h4>
                 <ul>
-                    <li><b>2026/10/23 英文麻將(暫不開放)</b>：4 人拼字麻將，摸一打一、搶牌、胡牌，請橫放手機遊玩。</li>
-                    <li><b>2026/10/23 更新</b>：排位賽改為 4~5 級字；好友列表顯示頭像；錯題庫可依記憶程度排序，並可自選級別練習；懸浮設定球會記住位置並新增全螢幕。</li>
-                    <li><b>2026/10/23 好友系統</b>：大廳「👥 我的好友」可複製自己的專屬玩家代碼、輸入對方代碼加好友，看到好友是否在線、最後上線時間，並能直接邀請好友加入多人房間。</li>
-                    <li><b>2026/10/23 單字詳情</b>：在錯題庫點擊單字，可查看加入與複習時間、估算的記憶曲線、建議複習時間，並一鍵前往Google或劍橋辭典。</li>
-                    <li><b>2026/10/23 再來一次</b>：單人模式結算畫面新增「 再來一次」。</li>
-                    <li><b>2026/10/22 個人檔案</b>：可上傳頭像、更改暱稱，並查看累計答題、複習單字數、各級正確率、錯誤率歷史曲線與最近遊玩紀錄。</li>
-                    <li><b>2026/10/22 成就系統</b>：連擊、生存、多人勝場、單字量、連續登入等 20 多個成就，解鎖時會跳出通知，並展示在個人檔案中。</li>
-                    <li><b>2026/10/22多人模式改版</b>：新增答對／答錯閃框特效與扣血、回血飄字；修正結束時血量顯示錯誤。</li>
-                    <li><b>2026/10/22 深色模式</b>：重新設計為柔和的藍灰配色，降低刺眼感，所有畫面一致。</li>
-                    <li><b>2026/10/22 報錯與建議</b>：在「⚙️ 設定」中新增回饋按鈕，訊息會寄到開發者信箱。</li>
-                    <li><b>語音朗讀功能</b>：單人遊戲出題時會自動朗讀英文單字，錯題庫中也能隨時點擊 🔊 按鈕聆聽標準發音！</li>
+                    <li><b>2026/10/25 英文麻將(測試版)</b>：4人拼字對戰，摸牌、碰牌、胡牌（請橫放手機全螢幕遊玩）。</li>
+                    <li><b>好友與個人檔案</b>：互加好友看上線狀態、一鍵邀請開房；可自訂頭像與查看詳細學習成就。</li>
+                    <li><b>記憶曲線複習</b>：錯題庫支援記憶程度排序、艾賓浩斯記憶曲線與連結劍橋字典查詢。</li>
+                    <li><b>排行榜</b>：更改為手動重新載入最新排行榜。</li>
+                </ul>
+                <h4>📚 核心功能</h4>
+                <ul>
+                    <li><b>錯題庫</b>：右滑加入錯題，點擊單字查看詳情，支援記憶曲線分析與自選級別重練。</li>
+                    <li><b>好友系統</b>：輸入專屬代碼加好友，線上即可一鍵邀請開房。</li>
+                    <li><b>個人檔案</b>：追蹤正確率、錯誤率趨勢與 40 多種解鎖成就。</li>
                 </ul>
                 <h4>🎮 單人遊戲</h4>
                 <ul>
-                    <li><b>排位賽</b>：4~5 級單字混合出題。血量會持續倒數，答對 +15 血、答錯 -25 血，血量歸零即結束。成績計入排行榜。</li>
-                    <li><b>計分</b>：答對一題 5 分，每一個連擊 (Combo) 讓每題多賺 1%。畫面會即時顯示答對、答錯、總題數與錯誤率。</li>
-                    <li><b>練習模式</b>：可複選 4 級、5 級、6 級、我的錯題庫。沒有血量、計時與連擊，想練多久都行，按「立即結算」結束。</li>
-                    <li><b>不確定功能</b>：若覺得這個單字不確定 可以先點擊題目，變成黃色代表之後會加入錯題庫，再次點擊以取消</li>
+                    <li><b>排位賽</b>：4~5級字挑戰。答對回血、答錯扣血，生存時間與分數計入排行榜。</li>
+                    <li><b>練習模式</b>：自選 1~6 級或錯題庫，輕鬆複習。</li>
+                    <li><b>不熟標記</b>：點擊題目單字可直接標記為不確定並加入錯題庫。</li>
                 </ul>
-                <h4>👥 多人遊戲（最多 6 人）</h4>
+                <h4>👥 多人遊戲</h4>
                 <ul>
-                    <li>房主「建立房間」，把 4 碼代碼告訴朋友；朋友輸入代碼「加入房間」。</li>
-                    <li>非房主玩家按「準備就緒」，想暫停可改按「稍等一下」。房主能看到每個人的狀態，全員準備好才能開始。</li>
-                    <li>答對會回血並攻擊對手，答錯會自己扣血。最後存活的人獲勝！</li>
-                    <li>結束後每個人可自行返回房間，再次準備就緒後開下一局。</li>
+                    <li><b>多人對戰</b>：輸入 4 碼房間代碼或透過好友邀請加入。答題回血並攻擊對手，存活到最後者獲勝！</li>
                 </ul>
-                <h4>📚 我的錯題庫</h4>
-                <ul>
-                    <li>每局結束後，在「本局錯題檢討」中把單字<b>向右滑動</b>即可加入錯題庫，或按「全部加入我的錯題庫」。</li>
-                    <li>遊戲中點擊題目單字，可標記為「不熟」並列入本局檢討。</li>
-                    <li>在錯題庫可依級數篩選、依字首或級數分組、搜尋單字；已經會的單字按「我會了」即可移除。</li>
-                    <li>點擊單字可進入詳情：複習時間、記憶曲線，以及 Google／劍橋辭典連結。</li>
-                    <li>錯題庫存在你這台裝置的瀏覽器中。</li>
-                </ul>
-                <h4>👥 好友</h4>
-                <ul>
-                    <li>每位玩家都有專屬玩家代碼，點擊即可複製。朋友輸入你的代碼就能互相成為好友。</li>
-                    <li>好友列表會顯示線上狀態與最後上線時間。好友在線時可按「🎮 邀請」，系統會建立房間並通知對方，對方按「加入」就會進入房間。</li>
-                    <li>已在房間內時，可用房間畫面的「👥 邀請好友」邀請更多人。</li>
-                    <li>玩家代碼存在這台裝置的瀏覽器中，清除瀏覽器資料後會換新的代碼。</li>
-                </ul>
-                <h4>👤 個人檔案與成就</h4>
-                <ul>
-                    <li>大廳點擊上方的頭像小卡即可開啟個人檔案；點頭像可上傳圖片（會自動裁成正方形並壓縮）。</li>
-                    <li>所有個人紀錄與成就都存在你這台裝置的瀏覽器中，清除瀏覽器資料會一併消失。</li>
-                    <li>頭像（縮小後的小圖）會同步給你的好友，在好友列表中顯示；原圖仍只存在你的瀏覽器。</li>
-                </ul>
-                <h4>🏆 排行榜</h4>
-                <ul>
-                    <li>大廳最上方可切換「生存秒數榜」與「分數榜」，只有排位賽成績會上榜。</li>
-                </ul>
+                
             </div>
-            <button id="btn-help-close" class="btn btn-primary" style="width: 100%; margin-top: 12px;">懂到</button>
+            <button id="btn-help-close" class="btn btn-primary" style="width: 100%; margin-top: 12px;">了解</button>
         </div>
     </div>
 
@@ -429,7 +412,7 @@
             <h2>關於我們與隱私權說明</h2>
             <div class="help-content">
                 <h4>關於此網站</h4>
-                <p>「英語單字King」是一款結合生存競賽與個人學習的高中英文單字學習網頁遊戲，旨在透過輕鬆有趣的方式幫助學生練習與複習學測常見單字。</p>
+                <p>「英語單字King」是一款結合遊戲與個人學習的高中英文單字學習網頁遊戲，旨在透過輕鬆有趣的方式幫助學生練習與複習學測常見單字。</p>
 
                 <h4>隱私權與資料儲存說明</h4>
                 <ul>
@@ -447,6 +430,9 @@
     </div>
 
     <!-- 載入所有級數的單字庫 -->
+    <script src="vocab_level1.js"></script>
+    <script src="vocab_level2.js"></script>
+    <script src="vocab_level3.js"></script>
     <script src="vocab_level4.js"></script>
     <script src="vocab_level5.js"></script>
     <script src="vocab_level6.js"></script>
@@ -458,29 +444,51 @@
     <div id="settings-modal" class="modal-overlay hidden">
         <div class="modal-card">
             <h2>⚙️ 遊戲設定</h2>
+            <p class="subtitle">(可調整懸浮球位置)
+            </p>
             <div class="help-content set-col">
-                <label class="check-row">
-                    <input type="checkbox" id="setting-speech" checked> 題目朗讀
-                </label>
-                <div class="set-field">
-                    <label for="setting-speech-volume" class="field-label">朗讀音量(<span
-                            id="volume-val">100</span>%)</label>
-                    <input type="range" id="setting-speech-volume" min="0" max="100" value="100">
+                <h3 class="set-group" data-collapse="set_speech" data-cdefault="closed">🗣️ 朗讀</h3>
+                <div class="set-body">
+                    <label class="check-row">
+                        <input type="checkbox" id="setting-speech" checked> 題目朗讀
+                    </label>
+                    <div class="set-field">
+                        <label for="setting-speech-volume" class="field-label">朗讀音量(<span
+                                id="volume-val">100</span>%)</label>
+                        <input type="range" id="setting-speech-volume" min="0" max="100" value="100">
+                    </div>
+                    <div class="set-field">
+                        <label for="setting-speech-voice" class="field-label">朗讀聲線選擇</label>
+                        <select id="setting-speech-voice" class="select">
+                            <option value="">預設 </option>
+                        </select>
+                    </div>
                 </div>
-                <div class="set-field">
-                    <label for="setting-speech-voice" class="field-label">朗讀聲線選擇</label>
-                    <select id="setting-speech-voice" class="select">
-                        <option value="">預設 </option>
-                    </select>
+
+                <h3 class="set-group" data-collapse="set_sound" data-cdefault="closed">🔊 音效</h3>
+                <div class="set-body">
+                    <label class="check-row">
+                        <input type="checkbox" id="setting-sound" checked> 遊戲音效與背景音樂
+                    </label>
+                    <div class="set-field">
+                        <label for="setting-sfx-volume" class="field-label">音效音量(<span
+                                id="sfx-volume-val">100</span>%)</label>
+                        <input type="range" id="setting-sfx-volume" min="0" max="100" value="100">
+                    </div>
                 </div>
-                <label class="check-row">
-                    <input type="checkbox" id="setting-sound" checked> 遊戲音效與背景音樂
-                </label>
-                <label class="check-row">
-                    <input type="checkbox" id="setting-darkmode"> 啟用深色模式
-                </label>
-                <button id="btn-fullscreen" class="btn btn-secondary">⛶ 進入全螢幕</button>
-                <button id="btn-open-feedback" class="btn btn-secondary">💬 報錯與建議</button>
+
+                <h3 class="set-group" data-collapse="set_display" data-cdefault="closed">🎨 顯示</h3>
+                <div class="set-body">
+                    <label class="check-row">
+                        <input type="checkbox" id="setting-darkmode"> 啟用深色模式
+                    </label>
+                    <button id="btn-fullscreen" class="btn btn-secondary">⛶ 進入全螢幕</button>
+                </div>
+
+                <h3 class="set-group" data-collapse="set_other" data-cdefault="closed">💬 其他</h3>
+                <div class="set-body">
+                    <button id="btn-open-feedback" class="btn btn-secondary">💬 報錯與建議</button>
+                </div>
             </div>
             <button id="btn-settings-close" class="btn btn-primary"
                 style="width: 100%; margin-top: 12px;">儲存並關閉</button>
@@ -545,10 +553,11 @@
     <!-- 🏅 成就通知 -->
     <div id="toast-root"></div>
 
-    <script src="app.js?v=8"></script>
-    <script src="profile.js?v=3"></script>
-    <script src="friends.js?v=2"></script>
-    <script src="mahjong.js?v=4"></script>
+    <script src="app.js?v=13"></script>
+    <script src="profile.js?v=6"></script>
+    <script src="friends.js?v=3"></script>
+    <script src="mahjong_words.js?v=1"></script>
+    <script src="mahjong.js?v=8"></script>
 </body>
 
 </html>

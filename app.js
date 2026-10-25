@@ -3,7 +3,8 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const safeKey = n => String(n).replace(/[.#$\[\]\/]/g, '_');
 const mySafeKey = () => safeKey(playerName);
-const LEVEL_LABEL = { level4: '4級', level5: '5級', level6: '6級' };
+const ALL_LEVELS = ['level1', 'level2', 'level3', 'level4', 'level5', 'level6'];
+const LEVEL_LABEL = { level1: '1級', level2: '2級', level3: '3級', level4: '4級', level5: '5級', level6: '6級' };
 const MANUAL_MARK = '手動標記不熟';
 
 // ---------- 狀態 ----------
@@ -12,6 +13,7 @@ let gameSettings = JSON.parse(localStorage.getItem('vocab_game_settings')) || {
     speech: true,
     sound: true,
     volume: 1.0,
+    sfxVolume: 1.0, // 遊戲音效 / 背景音樂音量
     voiceURI: '', // 空字串 = 自動使用 David（找不到則用英文預設聲線）
     darkMode: false // 預設關閉深色模式
 };
@@ -62,7 +64,7 @@ function recordSession(mode, won = false) {
 
 // ---------- DOM ----------
 const screens = { lobby: $('lobby-screen'), room: $('room-screen'), battle: $('battle-screen'), bank: $('bank-screen'), profile: $('profile-screen'), friends: $('friends-screen'), word: $('word-screen') };
-function showScreen(n) { Object.entries(screens).forEach(([k, el]) => el && el.classList.toggle('hidden', k !== n)); }
+function showScreen(n) { Object.entries(screens).forEach(([k, el]) => el && el.classList.toggle('hidden', k !== n)); if (typeof initCollapsibles === 'function') initCollapsibles(); }
 
 const mainMenuOptions = $('main-menu-options'), singleModeMenu = $('single-mode-menu');
 const multiRoomBox = $('multi-room-box'), practiceSetupBox = $('practice-setup-box');
@@ -100,6 +102,14 @@ const hostSettingsPanel = $('host-settings-panel'), selectVocabLevel = $('select
 let audioCtx = null;
 let bgmInterval = null;
 
+let masterGain = null;
+// 所有遊戲音效 / 背景音樂都經過這個總音量節點（設定中的「音效音量」）
+function sfxOut() {
+    initAudio();
+    if (!masterGain) { masterGain = audioCtx.createGain(); masterGain.connect(audioCtx.destination); }
+    masterGain.gain.value = typeof gameSettings.sfxVolume === 'number' ? gameSettings.sfxVolume : 1;
+    return masterGain;
+}
 function initAudio() {
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -188,7 +198,7 @@ function playCorrectSound() {
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
 
         osc.connect(gain);
-        gain.connect(audioCtx.destination);
+        gain.connect(sfxOut());
 
         osc.start(now);
         osc.stop(now + 0.3);
@@ -212,7 +222,7 @@ function playWrongSound() {
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
 
         osc.connect(gain);
-        gain.connect(audioCtx.destination);
+        gain.connect(sfxOut());
 
         osc.start(now);
         osc.stop(now + 0.25);
@@ -235,7 +245,7 @@ function playClickSound() {
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
 
         osc.connect(gain);
-        gain.connect(audioCtx.destination);
+        gain.connect(sfxOut());
 
         osc.start(now);
         osc.stop(now + 0.05);
@@ -263,7 +273,7 @@ function startBGM() {
             gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
 
             osc.connect(gain);
-            gain.connect(audioCtx.destination);
+            gain.connect(sfxOut());
 
             osc.start(now);
             osc.stop(now + 0.25);
@@ -303,28 +313,40 @@ function manageFirebaseVisibility() {
 
 function getVocabByLevels(levels) {
     const src = {
+        level1: typeof level1Vocab !== 'undefined' ? level1Vocab : [],
+        level2: typeof level2Vocab !== 'undefined' ? level2Vocab : [],
+        level3: typeof level3Vocab !== 'undefined' ? level3Vocab : [],
         level4: typeof level4Vocab !== 'undefined' ? level4Vocab : [],
         level5: typeof level5Vocab !== 'undefined' ? level5Vocab : [],
         level6: typeof level6Vocab !== 'undefined' ? level6Vocab : []
     };
-    // 依 4→5→6 順序去重：同一個字只算在最低的級別，並略過空白字
+    // 依 1→6 順序去重：同一個字只算在最低的級別，並略過空白字
     const seen = new Set(), byLevel = {};
-    ['level4', 'level5', 'level6'].forEach(l => {
+    ALL_LEVELS.forEach(l => {
         byLevel[l] = [];
         (Array.isArray(src[l]) ? src[l] : []).forEach(v => {
             const k = String(v.word || '').trim().toLowerCase();
             if (!k || seen.has(k)) return;
             seen.add(k);
-            byLevel[l].push({ word: v.word, meaning: v.meaning, level: l });
+            byLevel[l].push({ word: v.word, meaning: v.meaning, level: l, pos: v.pos || '' });
         });
     });
     let out = [];
     levels.forEach(l => { if (byLevel[l]) out = out.concat(byLevel[l]); });
     return out;
 }
+// 單字查詢表（詞性 / 中文意思），第一次用到才建立
+let _vocabMap = null;
+function vocabLookup(word) {
+    if (!_vocabMap) {
+        _vocabMap = new Map();
+        getVocabByLevels(ALL_LEVELS).forEach(v => _vocabMap.set(String(v.word).trim().toLowerCase(), v));
+    }
+    return _vocabMap.get(String(word || '').trim().toLowerCase()) || null;
+}
 
 function initVocabPool() {
-    allVocabPool = getVocabByLevels(['level4', 'level5', 'level6']);
+    allVocabPool = getVocabByLevels(ALL_LEVELS);
     if (allVocabPool.length === 0) {
         allVocabPool = [
             { word: "abandon", meaning: "放棄、拋棄", level: 'level4' },
@@ -362,6 +384,74 @@ function makeQuestion(pool, dPool, rng = Math.random) {
     return { word: t.word, meaning: t.meaning, level: t.level || 'level4', options: opts, answer: opts.indexOf(t.meaning) };
 }
 
+// ==================== 1-1. 可收合區塊（記住展開 / 收合狀態）====================
+const collapseState = (() => { try { return JSON.parse(localStorage.getItem('vocab_collapse_v1')) || {}; } catch (e) { return {}; } })();
+function isOpen(h) {
+    const v = collapseState[h.dataset.collapse];
+    return v === undefined ? h.dataset.cdefault !== 'closed' : v !== false;
+}
+function applyCollapse(h) {
+    const body = h.nextElementSibling; if (!body) return;
+    const open = isOpen(h); // 預設展開（data-cdefault="closed" 的區塊預設收合）
+    h.classList.add('collapsible'); h.classList.toggle('closed', !open);
+    h.setAttribute('role', 'button'); h.setAttribute('aria-expanded', String(open));
+    body.classList.toggle('c-hidden', !open);
+    body.style.display = open ? '' : 'none'; // 直接設定 display，不依賴 CSS
+}
+function initCollapsibles() { document.querySelectorAll('[data-collapse]').forEach(applyCollapse); }
+document.addEventListener('click', e => {
+    const h = e.target.closest && e.target.closest('[data-collapse]'); if (!h) return;
+    playClickSound();
+    const k = h.dataset.collapse;
+    collapseState[k] = !isOpen(h); // 展開 ↔ 收合，並記住玩家的選擇
+    try { localStorage.setItem('vocab_collapse_v1', JSON.stringify(collapseState)); } catch (err) { }
+    applyCollapse(h);
+});
+window.addEventListener('DOMContentLoaded', initCollapsibles);
+
+// ==================== 1-2. 單字詞性查詢 ====================
+// 1~3 級題庫本身有詞性；4~6 級沒有，所以詞性改用 Datamuse（免費、免金鑰）線上查詢，結果存在 localStorage，查過的字下次不用再連線。
+const WordInfo = (() => {
+    const KEY = 'vocab_wordinfo_v1', POS = { n: 'n.', v: 'v.', adj: 'adj.', adv: 'adv.' };
+    const SKIP = new Set('the a an and or but it its he she they we you i that this these those was is are be been were has have had will would can could not my your his her our their as to of'.split(' '));
+    let cache = {}; try { cache = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { }
+    const save = () => {
+        const ks = Object.keys(cache);
+        if (ks.length > 700) ks.slice(0, ks.length - 700).forEach(k => delete cache[k]);
+        try { localStorage.setItem(KEY, JSON.stringify(cache)); } catch (e) { }
+    };
+    const get = (q) => fetch('https://api.datamuse.com/words?' + q).then(r => r.ok ? r.json() : null).catch(() => null);
+    const enc = encodeURIComponent;
+    const clean = w => /^[a-z][a-z' -]*$/i.test(w);
+    async function pos(word) {
+        const c = cache[word]; if (c && c.pos) return c.pos;
+        const r = await get(`sp=${enc(word)}&md=p&max=1`);
+        if (!r) return null;
+        const hit = r.find(x => x.word.toLowerCase() === word.toLowerCase());
+        const p = hit && hit.tags ? [...new Set(hit.tags.map(t => POS[t]).filter(Boolean))] : [];
+        cache[word] = { ...(cache[word] || {}), pos: p }; save();
+        return p;
+    }
+    let q = 0;
+    async function fillPos(words, onEach) {
+        const id = ++q;
+        for (const w of words) {
+            if (id !== q) return;
+            const p = await pos(w);
+            if (id !== q) return;
+            if (p && p.length) onEach(w, p.join('/'));
+            await new Promise(r => setTimeout(r, 120));
+        }
+    }
+    return { pos, fillPos, cached: w => cache[w] || null };
+})();
+// 錯題庫單字的詞性字串：存檔值 → 題庫(1~3級) → 線上查詢快取
+function posOf(w) {
+    if (w.pos) return w.pos;
+    const v = vocabLookup(w.word); if (v && v.pos) return v.pos;
+    const c = WordInfo.cached(w.word); return c && c.pos && c.pos.length ? c.pos.join('/') : '';
+}
+
 // ==================== 2. 我的錯題庫 (localStorage) ====================
 function loadBank() {
     try { const a = JSON.parse(localStorage.getItem('vocab_wrong_bank') || '[]'); return Array.isArray(a) ? a : []; }
@@ -372,7 +462,8 @@ const saveBank = () => localStorage.setItem('vocab_wrong_bank', JSON.stringify(w
 const isInBank = word => wrongBank.some(w => w.word === word);
 function addToBank(item) {
     if (isInBank(item.word)) return false;
-    wrongBank.push({ word: item.word, meaning: item.correctMeaning, level: item.level || 'level4', addedAt: Date.now() });
+    const v = vocabLookup(item.word);
+    wrongBank.push({ word: item.word, meaning: item.correctMeaning, level: item.level || 'level4', pos: (v && v.pos) || '', addedAt: Date.now() });
     saveBank();
     if (hasProfile()) Profile.bankAdded();
     return true;
@@ -385,6 +476,13 @@ function recordBankReview(word, ok) {
     w.reviews.push({ t: Date.now(), ok: !!ok });
     if (w.reviews.length > 60) w.reviews = w.reviews.slice(-60);
     saveBank();
+}
+// 在檢討畫面「向左滑取消」：不算作「我會了」，也扣回加入次數
+function cancelAdd(word) {
+    if (!isInBank(word)) return false;
+    wrongBank = wrongBank.filter(w => w.word !== word); saveBank();
+    if (hasProfile() && Profile.bankUndo) Profile.bankUndo();
+    return true;
 }
 function removeFromBank(word) { wrongBank = wrongBank.filter(w => w.word !== word); saveBank(); if (hasProfile()) Profile.bankRemoved(); }
 
@@ -423,22 +521,21 @@ function renderBank() {
         html += `<div class="bank-row">
             <div class="bank-info" data-word="${esc(w.word)}" title="點擊查看單字詳情與記憶曲線"><div class="bank-word">${esc(w.word)}<span class="lv-badge">${esc(LEVEL_LABEL[w.level] || '')}</span>
             <span class="ret-badge ${retCls}" title="估算的目前記憶保留率">🧠 ${ret}%</span>
-            <button class="bank-speak-btn" data-word="${esc(w.word)}" style="background:none; border:none; cursor:pointer; font-size:14px; margin-left:4px;" title="聽發音">🔊</button></div>
+            ${(() => { const p = posOf(w); return `<span class="pos-badge" data-posw="${esc(w.word)}">${esc(p)}</span>`; })()}
+            </div>
             <div class="bank-meaning">${esc(w.meaning)}</div></div>
             <button class="bank-remove" data-word="${esc(w.word)}">✓ 我會了</button></div>`;
     });
     listEl.innerHTML = html;
+    // 4~6 級沒有內建詞性：背景補查（一次最多 60 個），查到會順便存進錯題庫
+    const missing = items.filter(w => !posOf(w)).slice(0, 60).map(w => w.word);
+    if (missing.length) WordInfo.fillPos(missing, (word, p) => {
+        const b = wrongBank.find(x => x.word === word); if (b) { b.pos = p; saveBank(); }
+        listEl.querySelectorAll('[data-posw]').forEach(el => { if (el.dataset.posw === word) el.textContent = p; });
+    });
 }
 
 $('bank-list').addEventListener('click', e => {
-
-    // 攔截點擊發音按鈕
-    const speakBtn = e.target.closest('.bank-speak-btn');
-    if (speakBtn) {
-        playClickSound();
-        speakWord(speakBtn.dataset.word);
-        return;
-    }
 
     const info = e.target.closest('.bank-info');
     if (info && !e.target.closest('.bank-remove')) {
@@ -557,6 +654,7 @@ function renderWordDetail() {
     $('wd-word').textContent = w.word;
     $('wd-meaning').textContent = w.meaning || '';
     $('wd-level').textContent = LEVEL_LABEL[w.level] || '';
+    $('wd-pos').textContent = posOf(w);
     $('wd-stats').innerHTML = [
         ['目前保留率', ret + '%'], ['答對次數', okN], ['答錯次數', badN],
         ['記憶穩定度', (Math.round(m.last.S * 10) / 10) + ' 天'], ['加入時間', fmtDateTime(w.addedAt || now)], ['最近複習', m.events.length ? fmtDateTime(m.events[m.events.length - 1].t) : '尚未複習']
@@ -607,7 +705,7 @@ $('btn-bank-practice').onclick = () => {
     const cnt = l => wrongBank.filter(w => w.level === l).length;
     $('bank-practice-opts').innerHTML =
         `<label class="check-row"><input type="checkbox" id="bp-all" checked> 全部 (${wrongBank.length} 字)</label>` +
-        ['level4', 'level5', 'level6'].map(l => `<label class="check-row"><input type="checkbox" class="bp-lv" value="${l}" ${cnt(l) ? 'checked' : 'disabled'}> ${LEVEL_LABEL[l]}錯題字 (${cnt(l)} 字)</label>`).join('');
+        ALL_LEVELS.map(l => `<label class="check-row"><input type="checkbox" class="bp-lv" value="${l}" ${cnt(l) ? 'checked' : 'disabled'}> ${LEVEL_LABEL[l]}錯題字 (${cnt(l)} 字)</label>`).join('');
     bpModal.classList.remove('hidden');
 };
 bpModal.addEventListener('change', e => {
@@ -656,19 +754,36 @@ function renderLeaderboard() {
     }).join('');
 }
 
-function listenBoard(ref, key) {
-    ref.on('value', snap => {
+// 排行榜只在進入網頁時讀取一次（once），之後要按「🔄」才會重新抓，不持續監聽，避免佔用資源
+let lbLoaded = { time: false, score: false }, lbRefreshing = false;
+function loadBoard(ref, key) {
+    return ref.once('value').then(snap => {
         const data = snap.val();
         lbData[key] = data ? Object.values(data).sort((a, b) => b.score - a.score) : [];
+        lbLoaded[key] = true;
         renderLeaderboard();
+    }).catch(() => {
+        if (!lbData[key].length) { const el = $('leaderboard-list'); if (el && lbTab === key) el.innerHTML = '<div class="lb-empty">載入失敗，請按上方 🔄 重試</div>'; }
     });
 }
-listenBoard(dbRef, 'time');
-listenBoard(scoreRef, 'score');
+loadBoard(dbRef, 'time');
+loadBoard(scoreRef, 'score');
+// 手動重新載入：按了才會向雲端抓最新榜單（轉圈期間不能連按）
+(() => {
+    const btn = $('btn-lb-refresh'); if (!btn) return;
+    btn.onclick = async e => {
+        e.stopPropagation(); playClickSound();
+        if (lbRefreshing) return;
+        lbRefreshing = true; btn.classList.add('spin'); btn.disabled = true;
+        await Promise.all([loadBoard(dbRef, 'time'), loadBoard(scoreRef, 'score')]);
+        setTimeout(() => { lbRefreshing = false; btn.classList.remove('spin'); btn.disabled = false; }, 1200);
+    };
+})();
 
 document.querySelectorAll('.lb-tabs .lb-tab').forEach(b => b.onclick = () => {
     playClickSound();
     lbTab = b.dataset.tab;
+    if (!lbLoaded[lbTab]) loadBoard(lbTab === 'time' ? dbRef : scoreRef, lbTab); // 第一次沒讀到時才補讀
     document.querySelectorAll('.lb-tabs .lb-tab').forEach(x => x.classList.toggle('active', x === b));
     updateBestTimeUI();
     renderLeaderboard();
@@ -680,7 +795,14 @@ function uploadRecord(ref, name, value) {
     ref.child(safeKey(name)).transaction(cur => {
         if (cur && cur.score >= value) return; // 放棄寫入
         return { name: name, score: value, timestamp: firebase.database.ServerValue.TIMESTAMP };
-    }, err => { if (err) console.error('成績上傳失敗：', err); });
+    }, (err, committed) => {
+        if (err) return console.error('成績上傳失敗：', err);
+        if (!committed) return;
+        // 不再監聽，所以自己把新成績更新到本機榜單
+        const k = ref === dbRef ? 'time' : 'score';
+        lbData[k] = (lbData[k] || []).filter(x => x.name !== name).concat({ name, score: value }).sort((a, b) => b.score - a.score);
+        renderLeaderboard();
+    });
 }
 
 // ==================== 4. 錯題紀錄 / 結算畫面 ====================
@@ -704,24 +826,24 @@ function buildSummary(headline, lines = []) {
 function createReviewCard(item) {
     const wrap = document.createElement('div');
     wrap.className = 'swipe-wrap';
-    wrap.innerHTML = `<div class="swipe-bg">➕ 加入錯題庫</div>
+    wrap.innerHTML = `<div class="swipe-bg add">➕ 加入錯題庫</div><div class="swipe-bg undo">↩ 取消加入</div>
         <div class="swipe-card">
             <div>
                 <div class="rv-word">${esc(item.word)}</div>
                 <div class="rv-correct">正解：${esc(item.correctMeaning)}</div>
                 <div class="rv-wrong">誤選：${esc(item.userChosenMeaning)}</div>
             </div>
-            <button class="mini-add-btn"></button>
+            <span class="rv-added"></span>
         </div>`;
-    const card = wrap.querySelector('.swipe-card'), btn = wrap.querySelector('.mini-add-btn');
+    const card = wrap.querySelector('.swipe-card'), tag = wrap.querySelector('.rv-added');
+    const bgAdd = wrap.querySelector('.swipe-bg.add'), bgUndo = wrap.querySelector('.swipe-bg.undo');
     const refresh = () => {
         const added = isInBank(item.word);
         card.classList.toggle('added', added);
-        btn.textContent = added ? '✓ 已加入' : '＋ 加入';
-        btn.disabled = added;
+        tag.textContent = added ? '✓ 已加入' : ''; // 只顯示狀態，加入 / 取消都用左右滑動
     };
     const doAdd = () => { if (addToBank(item)) playCorrectSound(); refresh(); updateAddAllBtn(); };
-    btn.onclick = doAdd;
+    const doUndo = () => { if (cancelAdd(item.word)) playClickSound(); refresh(); updateAddAllBtn(); };
     refresh();
 
     let startX = null, dx = 0;
@@ -733,14 +855,19 @@ function createReviewCard(item) {
     });
     card.addEventListener('pointermove', e => {
         if (startX === null) return;
-        dx = Math.max(0, e.clientX - startX);
-        card.style.transform = `translateX(${dx}px)`;
+        dx = e.clientX - startX;
+        // 只露出「目前這個方向有效」的背景：未加入 → 右滑加入；已加入 → 左滑取消
+        const added = isInBank(item.word);
+        bgAdd.style.opacity = dx > 0 && !added ? 1 : 0;
+        bgUndo.style.opacity = dx < 0 && added ? 1 : 0;
+        card.style.transform = `translateX(${(dx > 0 && added) || (dx < 0 && !added) ? dx * 0.25 : dx}px)`; // 無效方向有阻力感
     });
     const end = () => {
         if (startX === null) return;
         card.style.transition = 'transform 0.25s';
         card.style.transform = 'translateX(0)';
-        if (dx > 80) doAdd();
+        bgAdd.style.opacity = 0; bgUndo.style.opacity = 0;
+        if (dx > 80) doAdd(); else if (dx < -80) doUndo();
         startX = null; dx = 0;
     };
     card.addEventListener('pointerup', end);
@@ -816,6 +943,14 @@ window.addEventListener('DOMContentLoaded', () => {
         volInput.oninput = () => { volText.textContent = volInput.value; };
     }
 
+    const sfxInput = $('setting-sfx-volume'), sfxText = $('sfx-volume-val');
+    if (sfxInput && sfxText) {
+        const p0 = Math.round((typeof gameSettings.sfxVolume === 'number' ? gameSettings.sfxVolume : 1) * 100);
+        sfxInput.value = p0; sfxText.textContent = p0;
+        sfxInput.oninput = () => { sfxText.textContent = sfxInput.value; gameSettings.sfxVolume = Number(sfxInput.value) / 100; if (masterGain) masterGain.gain.value = gameSettings.sfxVolume; };
+        sfxInput.onchange = () => playClickSound(); // 放開滑桿時播一聲試聽
+    }
+
     // ---- 懸浮球位置：預設在螢幕左側，並記住玩家最後放的位置 ----
     const POS_KEY = 'vocab_float_pos', FM = 10;
     const clampY = y => Math.max(FM, Math.min(window.innerHeight - floatBtn.offsetHeight - FM, y));
@@ -875,6 +1010,7 @@ window.addEventListener('DOMContentLoaded', () => {
             const p = Math.round((gameSettings.volume !== undefined ? gameSettings.volume : 1.0) * 100);
             volInput.value = p; volText.textContent = p;
         }
+        if (sfxInput && sfxText) { const p = Math.round((typeof gameSettings.sfxVolume === 'number' ? gameSettings.sfxVolume : 1) * 100); sfxInput.value = p; sfxText.textContent = p; }
         settingsOpenedAt = Date.now();
         $('settings-modal').classList.remove('hidden');
     });
@@ -895,6 +1031,7 @@ window.addEventListener('DOMContentLoaded', () => {
         if (volInput) {
             gameSettings.volume = Number(volInput.value) / 100; // 將 0~100 轉為 0.0~1.0
         }
+        if (sfxInput) gameSettings.sfxVolume = Number(sfxInput.value) / 100;
         saveGameSettings();
 
         if (!gameSettings.sound) {
@@ -914,6 +1051,7 @@ window.addEventListener('DOMContentLoaded', () => {
             const voiceSelect = $('setting-speech-voice');
             if (voiceSelect) gameSettings.voiceURI = voiceSelect.value;
             if (volInput) gameSettings.volume = Number(volInput.value) / 100;
+            if (sfxInput) gameSettings.sfxVolume = Number(sfxInput.value) / 100;
 
             // 2. 深色模式
             gameSettings.darkMode = $('setting-darkmode').checked;

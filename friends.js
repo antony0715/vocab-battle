@@ -6,7 +6,7 @@
 // Firebase Realtime Database 結構：
 //   users/{CODE}            = { name, online, lastSeen, created }   玩家資料與上線狀態
 //   friends/{CODE}/{CODE2}  = 加好友的時間戳                          雙向各寫一筆
-//   invites/{CODE}/{FROM}   = { name, room, ts }                     房間邀請（被邀請者收到後刪除）
+//   invites/{CODE}/{FROM}   = { name, room, ts, game? }              房間邀請（被邀請者收到後刪除；game:'mj' = 英文麻將房間）
 const Friends = (() => {
     const CODE_KEY = 'vocab_player_code_v1';
     const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // 去掉易混淆的 I / L / O / 0 / 1
@@ -256,14 +256,20 @@ const Friends = (() => {
     }
 
     // ---------- 邀請好友到房間 ----------
-    function sendInvite(code, room) {
-        return db.ref(`invites/${code}/${myCode}`).set({ name: myName(), room: String(room), ts: TS() })
-            .then(() => notify(`已邀請 ${(info[code] && info[code].name) || code}（房間 #${room}）`, '📨'))
+    let mjCtx = null; // 在麻將房間裡開啟邀請視窗時：{ getRoom }
+    function sendInvite(code, room, game) {
+        const v = { name: myName(), room: String(room), ts: TS() }; if (game) v.game = game;
+        return db.ref(`invites/${code}/${myCode}`).set(v)
+            .then(() => notify(`已邀請 ${(info[code] && info[code].name) || code}（${game === 'mj' ? '麻將房間' : '房間'} #${room}）`, '📨'))
             .catch(() => notify('邀請送出失敗，請稍後再試', '⚠️'));
     }
 
     function inviteFriend(code) {
         if (!isOnline(info[code])) return notify('對方目前不在線，無法邀請', '⚪');
+        if (mjCtx) { // 英文麻將房間
+            const room = mjCtx.getRoom();
+            return room ? sendInvite(code, room, 'mj') : notify('請先進入麻將房間再邀請', '⚠️');
+        }
         if (singlePlaying) return notify('請先結束目前的單人遊戲', '⚠️');
         if (currentRoomRef) {
             if (lastRoomStatus === 'playing') return notify('這局進行中，等結束後再邀請吧', '⏳');
@@ -295,17 +301,22 @@ const Friends = (() => {
         const old = root.querySelector(`[data-from="${from}"]`); if (old) old.remove();
         const el = document.createElement('div');
         el.className = 'invite-card'; el.dataset.from = from;
-        el.innerHTML = `<div class="iv-text">📨 <b>${esc(v.name || from)}</b> 邀請你加入房間 <b>#${esc(v.room)}</b></div>
+        el.innerHTML = `<div class="iv-text">📨 <b>${esc(v.name || from)}</b> 邀請你加入${v.game === 'mj' ? '🀄 麻將' : ''}房間 <b>#${esc(v.room)}</b></div>
             <div class="iv-btns"><button class="btn btn-primary btn-sm iv-join">加入</button><button class="btn btn-secondary btn-sm iv-skip">忽略</button></div>`;
         const close = () => { el.remove(); db.ref(`invites/${myCode}/${from}`).remove(); };
         el.querySelector('.iv-skip').onclick = () => { playClickSound(); close(); };
-        el.querySelector('.iv-join').onclick = () => { playClickSound(); close(); acceptInvite(v.room); };
+        el.querySelector('.iv-join').onclick = () => { playClickSound(); close(); acceptInvite(v.room, v.game); };
         root.appendChild(el);
         setTimeout(() => { if (el.isConnected) close(); }, 60000);
         try { playClickSound(); } catch (e) { }
     }
 
-    function acceptInvite(room) {
+    function acceptInvite(room, game) {
+        if (game === 'mj') { // 麻將房間：交給麻將模組處理（它會檢查是否正在對局）
+            if (singlePlaying) return notify('請先結束目前的單人遊戲再加入房間', '⚠️');
+            if (currentRoomRef) { if (!confirm('要離開目前的房間並加入好友的麻將房間嗎？')) return; leaveRoomNow(); }
+            return Mahjong.joinByCode(String(room));
+        }
         if (singlePlaying) return notify('請先結束目前的單人遊戲再加入房間', '⚠️');
         if (currentRoomRef) {
             if (currentRoomRef.key === String(room)) return notify('你已經在這個房間了', '✅');
@@ -336,12 +347,15 @@ const Friends = (() => {
         $('friend-list').addEventListener('click', onList);
         $('invite-list').addEventListener('click', onList);
 
-        click('btn-invite-friends', () => { $('invite-modal').classList.remove('hidden'); renderAll(); });
-        click('btn-invite-close', () => $('invite-modal').classList.add('hidden'));
-        $('invite-modal').addEventListener('click', e => { if (e.target.id === 'invite-modal') e.target.classList.add('hidden'); });
+        click('btn-invite-friends', () => { mjCtx = null; $('invite-modal').classList.remove('hidden'); renderAll(); });
+        click('btn-invite-close', () => { mjCtx = null; $('invite-modal').classList.add('hidden'); });
+        $('invite-modal').addEventListener('click', e => { if (e.target.id === 'invite-modal') { mjCtx = null; e.target.classList.add('hidden'); } });
         renderCode();
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind); else bind();
 
-    return { syncName, getCode: () => myCode };
+    // 麻將房間的「邀請好友」：開啟同一個好友邀請視窗，但邀請內容標記為麻將房間
+    function openMjInvite(getRoom) { mjCtx = { getRoom }; $('invite-modal').classList.remove('hidden'); renderAll(); }
+
+    return { syncName, getCode: () => myCode, openMjInvite };
 })();
