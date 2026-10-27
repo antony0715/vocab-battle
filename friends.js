@@ -246,6 +246,46 @@ const Friends = (() => {
         } finally { btn.disabled = false; }
     }
 
+    // 以代碼直接加好友（房間裡點頭像用）
+    async function addByCode(code) {
+        code = normalize(code);
+        if (!myCode) return { ok: false, msg: '好友系統還在連線中，請稍後再試' };
+        if (!code) return { ok: false, msg: '這位玩家沒有玩家代碼（可能使用舊版）' };
+        if (code === myCode) return { ok: false, msg: '這是你自己喔！' };
+        if (friends[code]) return { ok: false, msg: '你們已經是好友了' };
+        try {
+            const snap = await db.ref('users/' + code).once('value');
+            if (!snap.exists()) return { ok: false, msg: '找不到這位玩家' };
+            const ts = TS(), up = {};
+            up[`friends/${myCode}/${code}`] = ts; up[`friends/${code}/${myCode}`] = ts;
+            await db.ref().update(up);
+            return { ok: true, msg: `已加入好友：${snap.val().name || code}` };
+        } catch (e) { console.warn(e); return { ok: false, msg: '新增失敗，請檢查網路連線' }; }
+    }
+    // 點玩家頭像跳出的小視窗（多人房間 / 麻將房間共用）：openCard({ code, name, avatar })
+    function openCard(p) {
+        let ov = $('fr-card'); if (ov) ov.remove();
+        ov = document.createElement('div'); ov.id = 'fr-card'; ov.className = 'modal-overlay';
+        const av = safeAvatar(p.avatar), nm = p.name || '玩家', code = normalize(p.code);
+        const isMe = code && code === myCode, isFr = code && friends[code];
+        ov.innerHTML = `<div class="modal-card" style="text-align:center;max-width:300px">
+            <div class="avatar" style="width:64px;height:64px;font-size:26px;margin:0 auto 8px">${av ? `<img src="${esc(av)}" alt="">` : esc(nm.trim().charAt(0).toUpperCase() || '?')}</div>
+            <h2 style="margin:0 0 4px">${esc(nm)}</h2>
+            <div id="fr-card-msg" class="fb-status" style="min-height:20px">${isMe ? '這是你自己' : isFr ? '✅ 你們已經是好友' : !code ? '這位玩家沒有玩家代碼（可能使用舊版）' : ''}</div>
+            <div class="btn-grid" style="margin-top:8px">${isMe || isFr || !code ? '' : '<button id="fr-card-add" class="btn btn-primary">➕ 加為好友</button>'}<button id="fr-card-close" class="btn btn-secondary">關閉</button></div></div>`;
+        document.body.appendChild(ov);
+        const close = () => ov.remove();
+        ov.addEventListener('click', e => { if (e.target === ov) close(); });
+        ov.querySelector('#fr-card-close').onclick = () => { playClickSound(); close(); };
+        const add = ov.querySelector('#fr-card-add');
+        if (add) add.onclick = async () => {
+            playClickSound(); add.disabled = true;
+            const r = await addByCode(code), m = ov.querySelector('#fr-card-msg');
+            m.textContent = (r.ok ? '✅ ' : '⚠️ ') + r.msg; m.className = 'fb-status ' + (r.ok ? 'ok' : 'err');
+            if (r.ok) add.remove(); else add.disabled = false;
+        };
+    }
+
     async function removeFriend(code) {
         const name = (info[code] && info[code].name) || code;
         if (!confirm(`確定要刪除好友「${name}」嗎？對方的好友列表也會移除你。`)) return;
@@ -357,5 +397,5 @@ const Friends = (() => {
     // 麻將房間的「邀請好友」：開啟同一個好友邀請視窗，但邀請內容標記為麻將房間
     function openMjInvite(getRoom) { mjCtx = { getRoom }; $('invite-modal').classList.remove('hidden'); renderAll(); }
 
-    return { syncName, getCode: () => myCode, openMjInvite };
+    return { syncName, getCode: () => myCode, openMjInvite, addByCode, openCard, isFriend: c => !!friends[normalize(c)] };
 })();

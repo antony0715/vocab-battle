@@ -1479,7 +1479,7 @@ function initMultiplayerRoom(roomCode, isCreating, onReady) {
     if (isCreating) {
         currentRoomRef.set({
             host: playerName, status: 'waiting',
-            players: { [key]: { name: playerName, isHost: true, hp: 100, isDead: false, ready: true } },
+            players: { [key]: { name: playerName, isHost: true, hp: 100, isDead: false, ready: true, code: myFriendCode() } },
             settings: { vocabLevel: 'all' }
         }).then(onJoined).catch(() => alert("建立房間失敗，請檢查網路連線！"));
     } else {
@@ -1489,14 +1489,23 @@ function initMultiplayerRoom(roomCode, isCreating, onReady) {
             if (snap.child('players/' + key).exists()) { alert('房間內已有相同暱稱的玩家，請換一個暱稱再加入！'); return; }
             if (snap.child('players').numChildren() >= 6) { alert('房間已滿 (最多 6 人)！'); return; }
             currentRoomRef.child('players/' + key)
-                .set({ name: playerName, isHost: false, hp: 100, isDead: false, ready: false })
+                .set({ name: playerName, isHost: false, hp: 100, isDead: false, ready: false, code: myFriendCode() })
                 .then(onJoined).catch(() => alert("加入房間失敗，請重試！"));
         });
     }
 }
 
 // 把自己的頭像縮圖寫進房間，讓房內玩家都看得到
+// 好友代碼：放進房間資料，別人點頭像才能加好友
+const myFriendCode = () => (typeof Friends !== 'undefined' && Friends.getCode && Friends.getCode()) || '';
+function syncRoomCode(n = 0) {
+    const ref = currentRoomRef; if (!ref) return;
+    const c = myFriendCode();
+    if (c) ref.child('players/' + mySafeKey() + '/code').set(c);
+    else if (n < 8) setTimeout(() => { if (ref === currentRoomRef) syncRoomCode(n + 1); }, 1500);
+}
 function syncRoomAvatar() {
+    syncRoomCode();
     if (!currentRoomRef || !hasProfile() || !Profile.getThumb) return;
     const ref = currentRoomRef;
     Profile.getThumb().then(av => { if (av && ref === currentRoomRef) ref.child('players/' + mySafeKey() + '/avatar').set(av); }).catch(() => { });
@@ -1519,7 +1528,12 @@ function renderRoomPlayers(room) {
         const item = document.createElement('div');
         item.className = 'room-player';
         const nm = p.name || '未知玩家', av = safeAvatar(p.avatar);
-        item.innerHTML = `<span class="nm" style="display:flex;align-items:center;gap:8px;"><span class="avatar" style="width:32px;height:32px;font-size:14px;">${av ? `<img src="${esc(av)}" alt="">` : esc(nm.trim().charAt(0).toUpperCase() || '?')}</span>${esc(nm)}${p.name === playerName ? ' (你)' : ''}</span>${tag}`;
+        item.innerHTML = `<span class="nm" style="display:flex;align-items:center;gap:8px;"><span class="avatar room-av" title="點擊可加好友" style="width:32px;height:32px;font-size:14px;cursor:pointer;">${av ? `<img src="${esc(av)}" alt="">` : esc(nm.trim().charAt(0).toUpperCase() || '?')}</span>${esc(nm)}${p.name === playerName ? ' (你)' : ''}</span>${tag}`;
+        const avEl = item.querySelector('.room-av');
+        if (avEl) avEl.addEventListener('click', () => {
+            if (p.name === playerName) return;
+            if (typeof Friends !== 'undefined' && Friends.openCard) Friends.openCard({ code: p.code, name: p.name, avatar: p.avatar });
+        });
         playerListContainer.appendChild(item);
     });
 }

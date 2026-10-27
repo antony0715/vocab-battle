@@ -1,7 +1,5 @@
 // ==================== 🀄 麻將專用補充單字 (mahjong_words.js) ====================
 // 只給英文麻將判定單字用（不會出現在一般題庫、也不會影響各級題庫與個人檔案統計）。
-// 都是很基礎、卻不一定在 1~6 級題庫裡的字：動物、數字、水果、蔬菜、顏色、家人、身體、食物、
-// 天氣自然、時間、學校、家裡、衣服、交通、地點、職業、常見形容詞與動詞等。
 // 之後想補字，直接把單字加進下面任一行（用空格隔開、全小寫）即可。
 const mjExtraWords = (`
 cat dog pig cow hen fox bat rat ant bee owl ape elk yak emu cub pup ram ewe lamb sheep horse mouse mice goat duck goose
@@ -41,5 +39,5 @@ run walk jump swim fly eat drink sleep sit stand come see look hear listen say t
 like want need use try work wash cook cut dig fix hug kick kiss laugh cry smile
 yes not and the for but you she her him his its our out all any can had has was are who why how now then than that this with from
 they them what when where which here there very too also just
-am an as at be by do go he hi if in is it me my no of oh on or ox so to up us we ah 
+am an as at be by do go he hi if in is it me my no of oh on or ox so to up us we ah antony zombie birth ass fuck sue 
 `).split(/\s+/).filter(w => /^[a-z]{2,}$/.test(w));

@@ -591,3 +591,52 @@ html.short-screen h1 { font-size: 20px; }
 #lobby-screen h1 {
     margin-top: 20px; /* 數值可以根據你喜歡的距離自行調整（例如 15px 或 30px） */
 }
+/* ===== 麻將 v5：2~6 人 / 計時圈 / 快捷交流 / 雞蛋 / 你的回合 ===== */
+.mj-play { padding-top: 64px; }
+.mj-oid { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.mj-nmw { position: relative; display: inline-flex; align-items: center; gap: 4px; }
+.mj-nm { background: #0007; color: #fff; border-radius: 8px; padding: 0 7px; font-size: 11px; max-width: 74px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mj-opp.tr, .mj-opp.tl { top: 10px; flex-direction: row; transform: translateX(-50%); }
+.mj-opp.tr { left: 70%; } .mj-opp.tl { left: 30%; }
+.mj-opp.tr .mj-melds, .mj-opp.tl .mj-melds { max-width: 16vw; }
+.mj-opp.tr .mj-bub { left: auto; right: 100%; margin: 0 6px 0 0; }
+.mj-opp.right .mj-bub { left: auto; right: 100%; margin: 0 6px 0 0; }
+.mj-opp.right .mj-nmw { flex-direction: row-reverse; }
+.z-tl { grid-column: 1; grid-row: 1; justify-content: flex-end; } .z-tr { grid-column: 3; grid-row: 1; justify-content: flex-start; }
+.np2 .z-top { grid-column: 1 / 4; }
+.np3 .z-tl { grid-row: 1 / 3; } .np3 .z-tr { grid-row: 1 / 3; }
+/* 黃色圓形倒數圈（從滿到沒有，快結束變紅） */
+.mj-ring { position: absolute; inset: -7px; border-radius: 50%; pointer-events: none; --p: 100%; --rc: #facc15;
+  background: conic-gradient(var(--rc) var(--p), rgba(255, 255, 255, .18) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px)); mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px)); }
+.mj-ring.red { --rc: #ef4444; }
+.mj-av.turn { border: 3px solid #fff; outline: none; transform: scale(1); }
+.mj-sec { position: absolute; inset: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 900; font-size: 16px; background: rgba(0, 0, 0, .42); text-shadow: 0 1px 3px #000; pointer-events: none; }
+.mj-sec:empty { display: none; } .mj-sec.red { color: #fecaca; background: rgba(127, 29, 29, .55); }
+.mj-avw.tgt { cursor: pointer; }
+/* 快捷交流 */
+.mj-chatb { background: #0007; color: #fff; border: none; border-radius: 10px; padding: 0 6px; font-size: 14px; line-height: 20px; cursor: pointer; }
+.mj-bub { position: absolute; left: 100%; top: 50%; transform: translateY(-50%); margin-left: 6px; background: #fff; color: #1e293b; font-weight: 800; font-size: 14px; border-radius: 12px; padding: 3px 10px; white-space: nowrap; box-shadow: 0 2px 6px #0006; z-index: 9; }
+#mj-chatpop { position: absolute; inset: 0; z-index: 1960; background: rgba(0, 0, 0, .4); display: flex; align-items: center; justify-content: center; }
+#mj-chatpop.hidden { display: none; }
+.mj-cp-in { background: var(--card); color: var(--text); border-radius: 16px; padding: 12px 14px; width: min(86%, 420px); }
+.mj-cp-h { font-weight: 800; margin-bottom: 8px; text-align: center; }
+.mj-cp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.mj-cp-grid button { padding: 10px 6px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 15px; font-weight: 700; cursor: pointer; }
+.mj-cp-grid button:active { background: var(--accent-soft); }
+/* 雞蛋 */
+.mj-egg { position: fixed; left: 0; top: 0; z-index: 1970; font-size: 28px; pointer-events: none; will-change: transform; }
+.mj-splat { position: absolute; inset: -3px; border-radius: 48% 52% 45% 55%; pointer-events: none; z-index: 6;
+  background: radial-gradient(circle at 45% 42%, #fde047 0 20%, rgba(255, 255, 255, .93) 21% 58%, rgba(255, 255, 255, .6) 59% 70%, transparent 72%); box-shadow: 0 6px 0 -2px rgba(255, 255, 255, .75); }
+/* 你的回合 */
+#mj-myturn { position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%) scale(.6); z-index: 1980; pointer-events: none; opacity: 0; font-size: 44px; font-weight: 900; color: #fde047; text-shadow: 0 3px 0 #92400e, 0 6px 18px #000a; letter-spacing: 4px; white-space: nowrap; }
+#mj-myturn.on { animation: mjmyturn 2s ease-out forwards; }
+@keyframes mjmyturn { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.5); } 12% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); } 22% { transform: translate(-50%, -50%) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -60%) scale(1); } }
+/* 房間設定 / 骰子（多人時縮小） */
+.mj-cfg { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.mj-sw { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 14px; }
+.mj-sw input[type=checkbox] { width: 20px; height: 20px; }
+.mj-sw input[type=number] { width: 80px; text-align: center; }
+.mj-note-l { font-size: 12px; color: var(--muted-2); }
+.mj-dcs.many .mj-dc { width: 84px; } .mj-dcs.many .mj-dice { font-size: 28px; } .mj-dcs.many { gap: 6px; }
+#mj-hint { max-width: 62%; }
