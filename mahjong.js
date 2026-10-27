@@ -22,7 +22,7 @@ const Mahjong = (() => {
     const C = () => AI_CFG[aiLevel];
     const db = firebase.database();
     const MAX_P = 6, MIN_P = 2;
-    const CHAT = ['快快快我要胡了', '必須得自摸', '手滑啦！', '完了嘛~', '碰一個炸爽', '一切都是昆率'];
+    const CHAT = ['一群菜逼', '必須得自摸', '手滑啦！', '完了嘛~', '碰一個炸爽', '一切都是昆率','快快快我要胡了'];
     // 座位位置（相對於自己，逆時針）：2 人對面；3 人右上/左上；4 人右/對面/左；5 人右/右上/左上/左；6 人平均分配
     const SLOTS = { 2: ['top'], 3: ['tr', 'tl'], 4: ['right', 'top', 'left'], 5: ['right', 'tr', 'tl', 'left'], 6: ['right', 'tr', 'top', 'tl', 'left'] };
     let serverOffset = 0; // 全部玩家共用「伺服器時間」，避免各裝置時鐘不同造成倒數/換人卡住
@@ -45,13 +45,20 @@ const Mahjong = (() => {
         (typeof mjExtraWords !== 'undefined' ? mjExtraWords : []).forEach(w => { // 麻將專用補充單字（沒有級別，不加級別台數）
             if (w.length >= 3) dict.add(w); else if (w.length === 2) dict2.add(w);
         });
+        try { JSON.parse(localStorage.getItem('mjLearned') || '[]').forEach(w => { if (/^[a-z]{3,}$/.test(w)) dict.add(w); }); } catch (e) { }
         dictList = [...dict];
         anaMap = new Map(); // 排序後的字母 → 單字（AI 判斷「差一張就能湊成單字」用）
         [...dict, ...dict2].forEach(w => { if (w.length <= 8) anaMap.set([...w].sort().join(''), w); });
     }
     const isWord = w => !!dict && w.length >= 3 && dict.has(w);
     const allow3 = () => !(room && room.cfg && room.cfg.allow3 === false);
-    const isWordG = w => isWord(w) && (allow3() || w.length >= 4); // 組成綠色組 / 碰牌用：不允許三字母時至少 4 個字母
+    const allow4 = () => !(room && room.cfg && room.cfg.allow4 === false);
+    // 三字母：不允許時只有「最後湊牌胡牌」可用；四字母：不允許時完全不算
+    const lenOk = (w, fin) => w.length === 3 ? (allow3() || !!fin) : w.length === 4 ? allow4() : true;
+    const isWordG = w => isWord(w) && lenOk(w, false); // 組成綠色組 / 碰牌用
+    const isWordF = w => isWord(w) && lenOk(w, true);  // 最後一個單字（胡牌湊牌）用
+    let soloCfg = { allow3: true, allow4: true };
+    try { Object.assign(soloCfg, JSON.parse(localStorage.getItem('mjSoloCfg') || '{}')); } catch (e) { }
     const turnSecOf = () => (room && room.cfg && +room.cfg.turnSec) || 0;
     const NP = () => (room && room.np) || 4;
     function zhOf(w) { // 單字的中文意思（從單字庫取第一個含中文的欄位）
@@ -155,7 +162,7 @@ const Mahjong = (() => {
 
     const root = document.createElement('div');
     root.id = 'mj-screen'; root.className = 'mj hidden';
-    root.innerHTML = '<div class="mj-rot">📱 請將手機橫放，才能玩英文麻將</div><div id="mj-body"></div><div id="mj-toast"></div><div id="mj-hint"></div><div id="mj-myturn">你的回合</div><div id="mj-chatpop" class="hidden"></div>';
+    root.innerHTML = '<div class="mj-rot">📱 請將手機橫放，才能玩英文麻將</div><div id="mj-body"></div><div id="mj-toast"></div><div id="mj-hint"></div><div id="mj-myturn">你的回合</div><div id="mj-chatpop" class="hidden"></div><div id="mj-search" class="hidden"></div>';
     document.body.appendChild(root);
     const body = root.querySelector('#mj-body');
     const hint = m => { const h = $('mj-hint'); if (!h) return; h.textContent = m; h.classList.add('on'); clearTimeout(hint.t); hint.t = setTimeout(() => h.classList.remove('on'), 2800); };
@@ -197,7 +204,24 @@ const Mahjong = (() => {
     // ---------- 進出 ----------
     let lowerCase = localStorage.getItem('mj_lowercase') === '1';
     const applyCase = () => root.classList.toggle('lc', lowerCase);
-    function open() { root.classList.remove('hidden'); buildDict(); applyCase(); loadSamples(); if (!ref) renderNotice(); }
+    // 進入麻將模式自動全螢幕（瀏覽器規定必須在點擊當下呼叫；iPhone Safari 不支援網頁全螢幕，會自動略過）
+    let fsByMj = false;
+    function goFull() {
+        try {
+            const el = document.documentElement;
+            if (document.fullscreenElement || document.webkitFullscreenElement) return;
+            const f = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen; if (!f) return;
+            const lock = () => { fsByMj = true; try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => { }); } catch (e) { } };
+            const r = f.call(el);
+            if (r && r.then) r.then(lock).catch(() => { }); else lock();
+        } catch (e) { }
+    }
+    function leaveFull() {
+        if (!fsByMj) return; fsByMj = false;
+        try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (e) { }
+        try { if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => { }); else if (document.webkitFullscreenElement && document.webkitExitFullscreen) document.webkitExitFullscreen(); } catch (e) { }
+    }
+    function open() { goFull(); root.classList.remove('hidden'); buildDict(); applyCase(); loadSamples(); if (!ref) renderNotice(); }
     function stopTimers() {
         clearInterval(cdTimer); clearTimeout(resolveTimer);
         aiTimers.forEach(clearTimeout); aiTimers = []; aiDone = new Set();
@@ -206,7 +230,7 @@ const Mahjong = (() => {
         if (drag) { const d = drag; drag = null; if (d.on) dropGhost(d); }
         introToken++; introing = false; root.querySelectorAll('.mj-intro,.mj-fly').forEach(x => x.remove());
         if (ref) ref.off(); ref = null; room = null; mySeat = -1; curRound = null; solo = false; cm = null; pending = null;
-        stopTimers(); chatMsg = {}; splats = {}; lastTurnTok = ''; chatSeen = {}; $('mj-chatpop').classList.add('hidden'); root.classList.remove('in-game'); renderMenu();
+        stopTimers(); chatMsg = {}; splats = {}; lastTurnTok = ''; chatSeen = {}; $('mj-chatpop').classList.add('hidden'); $('mj-search').classList.add('hidden'); root.classList.remove('in-game'); renderMenu();
     }
     function leave() {
         if (ref && room && !solo) {
@@ -216,7 +240,7 @@ const Mahjong = (() => {
         }
         cleanup();
     }
-    function close() { if (ref) leave(); root.classList.add('hidden'); showScreen('lobby'); showMenu('main'); }
+    function close() { if (ref) leave(); leaveFull(); root.classList.add('hidden'); showScreen('lobby'); showMenu('main'); }
 
     const cdValue = () => { // 倒數秒數；單人組牌不限時顯示 ∞
         const hasClaim = room.claims && Object.keys(room.claims).length;
@@ -259,7 +283,7 @@ const Mahjong = (() => {
     }
     function autoTurn() { // 每回合限時：時間到自動出牌（優先打剛摸到的牌）
         const sec = turnSecOf();
-        if (!sec || room.phase !== 'discard' || room.turn !== mySeat || !room.turnEnd || cm || now() < room.turnEnd || hand.length !== 17) return;
+        if (!sec || room.phase !== 'discard' || room.turn !== mySeat || !room.turnEnd || cm || now() < room.turnEnd || hand.length + meldsOf(mySeat).reduce((a, w) => a + w.length, 0) !== 17) return;
         const t = Date.now(); if (t - lastAutoTry < 1500) return; lastAutoTry = t;
         if (drag) abortDrag();
         const id = drawnId && hand.includes(drawnId) ? drawnId : (split(hand).rest.slice(-1)[0] ?? hand[hand.length - 1]);
@@ -286,12 +310,12 @@ const Mahjong = (() => {
     function create() {
         key = safeKey(myName());
         const c = String(Math.floor(1000 + Math.random() * 9000)), r = db.ref('mj/' + c);
-        r.transaction(cur => cur ? undefined : { host: key, status: 'lobby', cfg: { allow3: true, turnSec: 30 }, players: { [key]: { name: myName(), seat: 0, ready: true, code: myCode() } } },
+        r.transaction(cur => cur ? undefined : { host: key, status: 'lobby', cfg: { allow3: true, allow4: true, turnSec: 30 }, players: { [key]: { name: myName(), seat: 0, ready: true, code: myCode() } } },
             (err, ok) => ok ? enter(c) : toast('建立失敗，請再試一次'));
     }
     function join() { joinCode(($('mj-code').value || '').trim()); }
     function joinByCode(c) { // 好友邀請：直接加入對方的麻將房間
-        root.classList.remove('hidden'); buildDict(); applyCase(); loadSamples();
+        goFull(); root.classList.remove('hidden'); buildDict(); applyCase(); loadSamples();
         if (ref && room) {
             if (code === c) return;
             if (room.status === 'playing') return toast('你正在麻將對局中，無法加入其他房間');
@@ -315,7 +339,7 @@ const Mahjong = (() => {
                 p[key] = { name: myName(), seat, ready: false, code: myCode() };
                 if (v.status === 'ended') p[key].back = v.round; // 上一局剛結束：直接進入房間畫面
                 return p;
-            }, (err, ok) => ok ? enter(c) : toast('無法加入（房間已滿或暱稱重複）'));
+            }, (err, ok) => { if (ok) { r.child('kicked/' + key).remove(); enter(c); } else toast('無法加入（房間已滿或暱稱重複）'); });
         });
     }
 
@@ -338,16 +362,16 @@ const Mahjong = (() => {
         return { rounds, start: con[0] };
     }
     const introLen = n => 2550 + n * 2300 + 1500 + 3150 + 1700; // 開場動畫大約多久（讓首位玩家等大家都播完才摸牌）
-    const freshFields = { claims: null, claimed: null, melds: null, result: null, tings: null, reveal: null, last: null, chat: null, egg: null, pile: '', n: 0, claimEnd: 0, claimBase: 0, claimExt: false, turnEnd: 0, startAt: 0, introEnd: 0, phase: 'draw' };
+    const freshFields = { claims: null, claimed: null, melds: null, result: null, tings: null, reveal: null, last: null, chat: null, egg: null, pile: '', n: 0, claimEnd: 0, claimBase: 0, claimExt: false, turnEnd: 0, startAt: 0, introEnd: 0, shufAt: 0, phase: 'draw' };
     function startGame() { // 多人：房主
         const ents = Object.entries(room.players || {}).sort((a, b) => a[1].seat - b[1].seat), np = ents.length;
         if (np < MIN_P || np > MAX_P) return toast('需要 2~6 位玩家才能開始');
         if (ents.some(([k, p]) => k !== room.host && (!p.ready || (room.status === 'ended' && p.back !== room.round)))) return toast('還有玩家沒準備好');
-        const deck = makeDeck(), hands = {}, d = rollDice(np), u = {};
+        const deck = makeDeck(), hands = {}, u = {};
         for (let s = 0; s < np; s++) hands[s] = deck.splice(0, 16).join('');
         ents.forEach(([k], i) => { u['players/' + k + '/seat'] = i; }); // 座位重新排成 0 ~ np-1
         const startAt = now() + 1500;
-        ref.update({ ...u, ...freshFields, np, status: 'playing', round: Date.now(), deck: deck.join(''), hands, counts: Array(np).fill(16), turn: d.start, dice: d.rounds, startAt, introEnd: startAt + introLen(d.rounds.length) });
+        ref.update({ ...u, ...freshFields, np, status: 'playing', round: Date.now(), deck: deck.join(''), hands, counts: Array(np).fill(16), turn: -1, phase: 'dice', dice: { rd: 0, seats: ents.map((_, i) => i), rolls: null, hist: null }, shufAt: 0, startAt, introEnd: 0 });
     }
     function startSolo() { // 單人：我 + 3 位 AI（名字隨機）
         buildDict();
@@ -363,7 +387,7 @@ const Mahjong = (() => {
         const players = { [key]: { name: myName(), seat: 0, ready: true } };
         pool.forEach((n, i) => { players['ai' + (i + 1)] = { name: n, seat: i + 1, ai: true, ready: true }; });
         solo = true; code = 'SOLO'; curRound = null;
-        ref = localRef({ ...freshFields, host: key, np: 4, cfg: { allow3: true, turnSec: 0 }, status: 'playing', round: Date.now(), players, deck: deck.join(''), hands: { 0: hs[0].join('') }, counts: [16, 16, 16, 16], turn: d.start, dice: d.rounds });
+        ref = localRef({ ...freshFields, host: key, np: 4, cfg: { allow3: soloCfg.allow3, allow4: soloCfg.allow4, turnSec: 0 }, status: 'playing', round: Date.now(), players, deck: deck.join(''), hands: { 0: hs[0].join('') }, counts: [16, 16, 16, 16], turn: d.start, dice: d.rounds });
         ref.on('value', onRoom);
         sendAvatar();
         startCountdown();
@@ -382,7 +406,7 @@ const Mahjong = (() => {
         room = snap.val();
         if (!room) { toast('房間已關閉'); return cleanup(); }
         const me = room.players && room.players[key];
-        if (!me) { toast('你已不在房間'); return cleanup(); }
+        if (!me) { toast(room.kicked && room.kicked[key] ? '你被房主請出房間了' : '你已不在房間'); return cleanup(); }
         mySeat = me.seat;
         if (room.status === 'lobby' || (room.status === 'ended' && me.back === room.round)) { root.classList.remove('in-game'); return render(); } // 房間畫面（結束後每位玩家各自按「回到房間」）
         root.classList.add('in-game');
@@ -392,7 +416,7 @@ const Mahjong = (() => {
             curRound = room.round; tiles = {}; nextId = 1; hand = []; drawnId = null; drawFly = false; selfDraw = false;
             cm = null; pending = null; claimBlockedN = 0; callouts = {}; tingSeen = new Set(); revealSent = false; waitCache = { k: '', v: [] };
             drawing = false; lastClaimN = 0; resolvedFor = ''; lastSpokenN = 0; chatMsg = {}; chatSeen = {}; splats = {}; lastTurnTok = '';
-            const doIntro = !room.n && room.phase === 'draw';
+            const doIntro = !room.n && (room.phase === 'draw' || room.phase === 'dice');
             introToken++; introing = doIntro; // 先標記「開場中」：下面 remove() 會同步觸發本機事件，若沒先標記，輪到的第一位玩家會在開場動畫前就偷摸牌（舊版 bug）
             ((room.hands && room.hands[mySeat]) || '').split('').filter(Boolean).forEach(addTile);
             ref.child('hands/' + mySeat).remove();
@@ -422,6 +446,7 @@ const Mahjong = (() => {
         });
         if (cm && (room.phase !== 'claim' || !room.last || room.last.n !== cm.n)) endClaimMode(true); // 這一輪碰牌結束（沒碰成）
         if (pending && (!room.last || pending.n !== room.last.n)) pending = null;
+        if (diceUI) safe(diceUI.update);
         safe(() => { // 快捷交流 / 丟雞蛋（全部玩家都看得到）
             const ch = room.chat || {};
             Object.keys(ch).forEach(s => { const c = ch[s]; if (!c || chatSeen[s] === c.k) return; chatSeen[s] = c.k; if (now() - (c.ts || 0) < 4000 && CHAT[c.i]) showChat(+s, CHAT[c.i]); });
@@ -438,6 +463,26 @@ const Mahjong = (() => {
             if (solo && !introing) safe(aiDrive);
         }
         render();
+    }
+    let diceUI = null;
+    function rollMine() { // 手動擲骰：每位玩家各按一次
+        const r6 = () => 1 + Math.floor(Math.random() * 6);
+        ref.child('dice').transaction(d => {
+            if (!d || !d.seats || !d.seats.includes(mySeat)) return;
+            d.rolls = d.rolls || {}; if (d.rolls['s' + mySeat]) return;
+            d.rolls['s' + mySeat] = [r6(), r6()]; return d;
+        });
+    }
+    function resolveDice() { // 全部擲完後比大小；同點者再擲，直到只剩一人，才進入洗牌與發牌
+        ref.transaction(r => {
+            if (!r || r.phase !== 'dice' || !r.dice || !r.dice.rolls) return;
+            const d = r.dice; if (!d.seats.every(s => d.rolls['s' + s])) return;
+            const sum = s => d.rolls['s' + s][0] + d.rolls['s' + s][1], mx = Math.max(...d.seats.map(sum)), tops = d.seats.filter(s => sum(s) === mx);
+            const hist = d.hist || []; hist.push({ seats: d.seats, tops }); d.hist = hist;
+            if (tops.length === 1) { r.turn = tops[0]; r.phase = 'draw'; r.shufAt = now() + 1800; r.introEnd = r.shufAt + 3150 + 1700; }
+            else { d.seats = tops; d.rolls = null; d.rd = (d.rd || 0) + 1; }
+            return r;
+        });
     }
     function showMyTurn() { // 輪到自己：畫面中央大字「你的回合」約 2 秒
         if (introing || room.turn !== mySeat || (room.phase !== 'draw' && room.phase !== 'discard')) return;
@@ -473,6 +518,34 @@ const Mahjong = (() => {
             e.remove(); sfx('splat'); splats[to] = true; render();
             setTimeout(() => { delete splats[to]; render(); }, 2600);
         };
+    }
+    function openSearch() {
+        const p = $('mj-search');
+        p.innerHTML = `<div class="mj-cp-in"><div class="mj-cp-h">🔍 查單字</div>
+            <div class="mj-note-l" style="text-align:center;margin-bottom:6px">拼對了但沒變綠？輸入你拼的單字，確認存在就會加入合法單字</div>
+            <div class="mj-sr"><input id="mj-sq" type="text" maxlength="24" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="輸入英文單字"><button class="btn btn-primary" id="mj-sgo">查詢</button></div>
+            <div id="mj-smsg" class="mj-smsg"></div></div>`;
+        p.classList.remove('hidden');
+        const q = $('mj-sq'); setTimeout(() => q.focus(), 50);
+        const go = () => lookupWord(q.value);
+        $('mj-sgo').onclick = () => { playClickSound(); go(); };
+        q.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+    }
+    async function lookupWord(raw) {
+        const m = $('mj-smsg'), w = String(raw || '').trim().toLowerCase();
+        if (!/^[a-z]{3,}$/.test(w)) { m.className = 'mj-smsg err'; m.textContent = '請輸入 3 個字母以上的英文單字'; return; }
+        if (!lenOk(w, true)) { m.className = 'mj-smsg err'; m.textContent = `這個房間設定不允許 ${w.length} 個字母的單字`; return; }
+        if (dict.has(w)) { m.className = 'mj-smsg ok'; m.textContent = `✅ ${w.toUpperCase()} 本來就在單字庫裡了`; return; }
+        m.className = 'mj-smsg'; m.textContent = '查詢中…';
+        try {
+            const res = await fetch('https://api.dictionaryapi.dev/api/v2/entries/en/' + encodeURIComponent(w));
+            if (res.status === 404) { m.className = 'mj-smsg err'; m.textContent = '沒有這個字 你拚對了嗎'; return; }
+            if (!res.ok) throw new Error(res.status);
+            dict.add(w); dictList.push(w); if (w.length <= 8) anaMap.set([...w].sort().join(''), w); waitCache = { k: '', v: [] };
+            try { const L = JSON.parse(localStorage.getItem('mjLearned') || '[]'); if (!L.includes(w)) { L.push(w); localStorage.setItem('mjLearned', JSON.stringify(L.slice(-300))); } } catch (e) { }
+            m.className = 'mj-smsg ok'; m.textContent = `✅ ${w.toUpperCase()} 存在！手牌中的這組字已變為合法單字`;
+            if (room && ref) render();
+        } catch (e) { m.className = 'mj-smsg err'; m.textContent = '查詢失敗，請檢查網路連線'; }
     }
     function openChat() {
         const p = $('mj-chatpop');
@@ -555,8 +628,8 @@ const Mahjong = (() => {
         if (sp.rest.length === 2 && dict2.has(rw2)) return { words: [...sp.segs.map(s => s.w), rw2], two: true };
         return null;
     }
-    const specialReady = () => room && room.status === 'playing' && room.phase === 'claim' && room.last && room.last.by === mySeat
-        && room.counts[mySeat] === 16 && hand.length === 16 && !introing ? specialOf(hand) : null;
+    // 手牌（不含已碰的牌）共 16 張邏輯張數且全是合法單字組 → 隨時（包含別人的回合）都可以按胡
+    const specialReady = () => room && room.status === 'playing' && room.phase !== 'dice' && room.counts && room.counts[mySeat] === 16 && !cm && !introing ? specialOf(hand) : null;
     function discardTile(id) {
         if (!room || room.phase !== 'discard' || room.turn !== mySeat || !hand.includes(id)) return false;
         const ch = tiles[id], was = drawnId, wasSelf = selfDraw;
@@ -622,7 +695,7 @@ const Mahjong = (() => {
         const L = ids.map(letterOf), n = L.length, best = [{ cov: 0, k: 0, prev: -1, len: 0 }];
         for (let i = 1; i <= n; i++) {
             let b = { cov: best[i - 1].cov, k: best[i - 1].k, prev: i - 1, len: 0 };
-            for (let len = allow3() ? 3 : 4; len <= i; len++) {
+            for (let len = 3; len <= i; len++) {
                 const s = i - len;
                 if (isWordG(L.slice(s, i).join(''))) {
                     const c = { cov: best[s].cov + len, k: best[s].k + 1, prev: s, len };
@@ -644,7 +717,7 @@ const Mahjong = (() => {
         const { segs, rest } = split(ids), words = segs.map(s => s.w);
         if (!rest.length) return words.length || meldsOf(mySeat).length ? { words, two: false } : null;
         const rw = wordOf(rest);
-        if (isWord(rw)) return { words: [...words, rw], two: false };
+        if (isWordF(rw)) return { words: [...words, rw], two: false };
         if (rw.length === 2 && dict2.has(rw)) return { words: [...words, rw], two: true };
         return null;
     }
@@ -652,7 +725,7 @@ const Mahjong = (() => {
         const R = rest.map(letterOf);
         for (let p = 0; p <= R.length; p++) {
             const w = [...R.slice(0, p), c, ...R.slice(p)].join('');
-            if (isWord(w)) return { w, two: false };
+            if (isWordF(w)) return { w, two: false };
             if (w.length === 2 && dict2.has(w)) return { w, two: true };
         }
         return null;
@@ -679,7 +752,7 @@ const Mahjong = (() => {
     const ronReady = () => !!room && room.status === 'playing' && room.phase === 'claim' && !!room.last && room.last.by !== mySeat
         && declared() && !cm && currentWaits().includes(room.last.ch);
     const zimoInfo = () => room && room.status === 'playing' && room.phase === 'discard' && room.turn === mySeat && room.counts[mySeat] === 17 && !introing ? winInfo(hand) : null;
-    function score(words, self, two) {
+    function score(words, self, two, special) {
         let t = 0; const lines = [];
         words.forEach(w => {
             if (two && w.length === 2) { lines.push(`${w.toUpperCase()}：二字母單字（不計台）`); return; }
@@ -690,16 +763,18 @@ const Mahjong = (() => {
         });
         if (self) { t += 5; lines.push('自摸 +5 台'); }
         if (two) { t = Math.max(1, Math.floor(t / 3)); lines.push('含二字母單字：台數大幅降低'); }
+        if (special) { t = Math.max(1, Math.floor(t / 2)); lines.push('特殊胡：台數減半'); }
         return { tai: t, lines };
     }
     function declareWin(seat, words, self, two, from, n, special) {
-        const sc = score(words, self, two), name = seatName(seat);
-        if (special) sc.lines.push('特殊胡：出牌（或碰牌）後手牌全部組成合法單字');
+        const sc = score(words, self, two, special), name = seatName(seat);
+        if (special) sc.lines.push('特殊胡：手牌全部是合法單字組（不必等到出牌）');
         if (room && room.cfg && room.cfg.allow3 === false) sc.lines.push('本局不允許三字母單字（僅最後湊牌可用）');
+        if (room && room.cfg && room.cfg.allow4 === false) sc.lines.push('本局不允許四字母單字');
         ref.transaction(r => {
             if (!r || r.status !== 'playing') return;
             const okSelf = from == null && r.phase === 'discard' && r.turn === seat;
-            const okSp = !!special && from == null && r.phase === 'claim' && r.last && r.last.by === seat && (n == null || r.last.n === n); // 出牌後手牌全成單字
+            const okSp = !!special && from == null && r.phase !== 'dice' && r.counts && r.counts[seat] === 16; // 手牌全成單字（只有 16 張時）
             const okRon = from != null && r.phase === 'claim' && r.last && r.last.n === n && r.last.by === from;
             if (!okSelf && !okRon && !okSp) return;
             r.status = 'ended';
@@ -711,7 +786,7 @@ const Mahjong = (() => {
         const z = zimoInfo();
         if (z) return declareWin(mySeat, [...z.words, ...meldsOf(mySeat)], selfDraw, z.two, null, undefined, !selfDraw);
         const sp = specialReady();
-        if (sp) return declareWin(mySeat, [...sp.words, ...meldsOf(mySeat)], false, sp.two, null, room.last.n, true);
+        if (sp) return declareWin(mySeat, [...sp.words, ...meldsOf(mySeat)], false, sp.two, null, undefined, true);
         if (ronReady()) { // 胡別人打出的牌
             const ch = room.last.ch, { segs, rest } = split(hand), c = completeWith(rest, ch);
             if (!c) return toast('目前的排列還湊不出單字');
@@ -728,7 +803,7 @@ const Mahjong = (() => {
     // ---------- AI（單人練習）：故意不太聰明 ----------
     const aiLater = (ms, fn) => aiTimers.push(setTimeout(() => { if (solo && ref && room && room.status === 'playing') fn(); }, ms));
     function plan(ls, trials = 8) { // 從一堆字母中，盡量湊出最多張牌的不重疊單字
-        const c0 = cnt(ls), cands = dictList.filter(w => w.length <= ls.length && fits(w, c0));
+        const c0 = cnt(ls), cands = dictList.filter(w => w.length <= ls.length && lenOk(w, false) && fits(w, c0));
         let best = null;
         for (let t = 0; t < trials; t++) {
             const order = cands.map(w => ({ w, s: w.length + Math.random() * 2.2 })).sort((a, b) => b.s - a.s);
@@ -820,7 +895,7 @@ const Mahjong = (() => {
         root.querySelectorAll('.mj-intro').forEach(x => x.remove());
         const ov = document.createElement('div'); ov.className = 'mj-intro'; root.appendChild(ov);
         const alive = () => tok === introToken && room && ref;
-        const stop = () => ov.remove();
+        const stop = () => { ov.remove(); if (!solo) diceUI = null; };
         const FACE = '⚀⚁⚂⚃⚄⚅', r6 = () => 1 + Math.floor(Math.random() * 6);
         const shuffleHtml = '<div class="mj-shuf">' + Array.from({ length: 16 }, () => `<i style="--dx:${Math.round(Math.random() * 90 - 45)}px;--dy:${Math.round(Math.random() * 50 - 25)}px;--r:${Math.round(Math.random() * 50 - 25)}deg;animation-delay:${(-Math.random() * .6).toFixed(2)}s"></i>`).join('') + '</div><div class="mj-intro-txt">洗牌中…</div>';
 
@@ -854,11 +929,53 @@ const Mahjong = (() => {
             };
             step();
         };
+        const diceStageMulti = next => { // 多人：手動擲骰，狀態由房間資料同步
+            const anim = {}, seen = {}; let iv = null, finishing = false, rdKey = -1, resolveT = null, autoT = null;
+            ov.classList.add('manual');
+            const faces = v => `<span>${FACE[v[0] - 1]}</span><span>${FACE[v[1] - 1]}</span>`;
+            const draw = () => {
+                const d = room.dice; if (!d || !d.seats) return;
+                const decided = !!room.shufAt, t = Date.now();
+                const sums = s => d.rolls && d.rolls['s' + s] ? d.rolls['s' + s][0] + d.rolls['s' + s][1] : -1;
+                const allIn = d.rolls && d.seats.every(s => sums(s) > 0), mx = allIn ? Math.max(...d.seats.map(sums)) : 0;
+                const tops = allIn ? d.seats.filter(s => sums(s) === mx) : null;
+                const cards = Array.from({ length: NP() }, (_, s) => s).map(s => {
+                    const k = d.seats.indexOf(s), rv = k >= 0 && d.rolls ? d.rolls['s' + s] : null, rolling = rv && anim[s] > t;
+                    const btn = k >= 0 && !rv ? (s === mySeat ? '<button class="btn btn-primary mj-rollb" data-a="roll">🎲 擲骰!</button>' : '<div class="mj-dm">等待中…</div>') : '';
+                    return `<div class="mj-dc ${k < 0 ? 'out' : ''} ${tops && !rolling && tops.includes(s) ? 'top' : ''}">${avHtml(s, 's')}<b>${esc(seatName(s))}</b>
+                        <div class="mj-dice">${rv ? faces(rolling ? [r6(), r6()] : rv) : '—'}</div><div class="mj-dsum">${rv && !rolling ? sums(s) : ''}</div>${btn}</div>`;
+                }).join('');
+                const title = decided ? '擲骰結果' : (d.rd || 0) === 0 ? '🎲 每位玩家按「擲骰!」，點數最大者先開始' : '同點！同點的人再擲一次';
+                const msg = decided ? `🎲 ${esc(seatName(room.turn))} 先開始！` : allIn ? '比較點數中…' : '&nbsp;';
+                ov.innerHTML = `<div class="mj-dp"><div class="mj-dt">${title}</div><div class="mj-dcs ${NP() > 4 ? 'many' : ''}">${cards}</div><div class="mj-dm">${msg}</div></div>`;
+            };
+            const update = () => {
+                if (!alive()) { diceUI = null; return stop(); }
+                const d = room.dice; if (!d || !d.seats) return;
+                const ro = d.rolls || {};
+                d.seats.forEach(s => { const v = ro['s' + s], k = (d.rd || 0) + '|' + s; if (v && !seen[k]) { seen[k] = 1; anim[s] = Date.now() + 2000; sfx('dice'); } }); // 有人擲骰就播一次音效
+                if (!iv) iv = setInterval(() => { if (!alive() || finishing) return clearInterval(iv); let need = false; Object.keys(anim).forEach(k => { need = true; if (anim[k] <= Date.now()) { delete anim[k]; sfx('drop'); } }); if (need) draw(); }, 90);
+                draw();
+                if ((d.rd || 0) !== rdKey) { // 新的一輪：重設計時；太久沒按的玩家自動幫他擲
+                    rdKey = d.rd || 0; clearTimeout(resolveT); clearTimeout(autoT);
+                    autoT = setTimeout(() => { if (alive() && !room.shufAt && room.dice && (room.dice.rd || 0) === rdKey && room.dice.seats.includes(mySeat) && !(room.dice.rolls && room.dice.rolls['s' + mySeat])) rollMine(); }, 20000);
+                }
+                const allIn = d.rolls && d.seats.every(s => d.rolls['s' + s]);
+                if (allIn && !room.shufAt && !resolveT) resolveT = setTimeout(() => { resolveT = null; if (alive()) resolveDice(); }, 3000 + mySeat * 250);
+                if (!allIn) { clearTimeout(resolveT); resolveT = null; }
+                if (room.shufAt && !finishing) { // 決定了先後：等到大家約定的時間，開始洗牌發牌
+                    finishing = true; clearInterval(iv); clearTimeout(autoT); clearTimeout(resolveT);
+                    setTimeout(() => { diceUI = null; next(); }, Math.max(0, room.shufAt - now()));
+                }
+            };
+            ov.addEventListener('click', e => { if (e.target.closest('[data-a="roll"]')) rollMine(); });
+            diceUI = { update }; update();
+        };
         let c = 3;
         const tick = () => {
             if (!alive()) return stop();
             if (c > 0) { ov.innerHTML = `<div class="mj-cd-wrap"><small>即將開始</small><div class="mj-cd-num">${c}</div></div>`; sfx('tick'); c--; setTimeout(tick, 850); }
-            else diceStage(() => { if (!alive()) return stop(); ov.innerHTML = shuffleHtml; sfx('shuffle'); setTimeout(deal, SAMPLES.m3 ? Math.min(3000, Math.max(1500, Math.round(SAMPLES.m3.duration * 1000) + 150)) : 1500); });
+            else (solo ? diceStage : diceStageMulti)(() => { if (!alive()) return stop(); ov.innerHTML = shuffleHtml; sfx('shuffle'); setTimeout(deal, SAMPLES.m3 ? Math.min(3000, Math.max(1500, Math.round(SAMPLES.m3.duration * 1000) + 150)) : 1500); });
         };
         const deal = () => {
             if (!alive()) return stop();
@@ -897,10 +1014,12 @@ const Mahjong = (() => {
             <button class="btn btn-secondary" data-a="exit">返回主選單</button></div>`;
     }
     function renderMenu() {
-        body.innerHTML = `<div class="mj-lobby"><h2>🀄 英文麻將</h2>
+        body.innerHTML = `<div class="mj-lobby"><div class="mj-update">🆕 更新通知：正確的單字沒變綠？點擊「碰」旁邊的放大鏡 🔍 來搜尋！</div><h2>🀄 英文麻將</h2>
             <p class="mj-note">用字母牌拼出單字，最先把手牌全部拼成單字的人胡牌！<br>請使用橫向全螢幕。目前暱稱：<b>${esc(myName())}</b></p>
             <div class="mj-lv" title="電腦難度">🤖 電腦難度
                 ${Object.entries(AI_CFG).map(([k, v]) => `<button class="${k === aiLevel ? 'on' : ''}" data-a="lv:${k}">${v.name}</button>`).join('')}</div>
+            <div class="mj-cfg" style="max-width:360px;width:100%"><label class="mj-sw"><input type="checkbox" id="mj-s3" ${soloCfg.allow3 ? 'checked' : ''}><span>允許三個字母的單字</span></label>
+                <label class="mj-sw"><input type="checkbox" id="mj-s4" ${soloCfg.allow4 ? 'checked' : ''}><span>允許四個字母的單字</span></label></div>
             <button class="btn btn-primary" data-a="solo">🤖 單人練習（與 3 位 AI 對戰・組牌不限時）</button>
             <button class="btn btn-sky" data-a="multi">👥 多人房間（2~6 位玩家）</button>
             <button class="btn btn-secondary" data-a="rules">📖 麻將規則說明</button>
@@ -921,8 +1040,8 @@ const Mahjong = (() => {
             <h3>👆 操作</h3><ul><li><b>拖曳手牌</b>即可自己排列手牌與出牌</li><li>連續排好的字母如果拼成合法單字，會<b>自動靠在一起成為一組(綠色底)</b></li><li><b>把牌拖到牌桌中央</b>就能出牌。</li><li><b>整理(可好好利用)</b>：把單字組整組移到最左邊（依首字母排序），其餘的牌依序接在後面。</li></ul>
             <h3>✋ 碰</h3><ul><li>別人打出一張牌後，其他三位玩家有<b>6 秒</b>可以按「碰」。</li><li>有人按碰時，總倒數會<b>再加 10 秒</b>。</li><li>按下去後會出現<b>組牌區</b>：把手牌拖進去，和被打出的那張牌手動組成單字；組成單字成功時底下會變綠色，記得按右下角的 ✓ 送出。</li><li>組不出單字？再按一次「取消」，牌會放回手牌區，而且這一輪不能再碰。</li><li>所有人都送出或時間到後，<b>單字最長者優先</b>。碰到的單字會公開擺在你前方的牌桌上，然後由你打出一張牌。</li></ul>
             <h3>🎯 聽牌</h3><ul><li>當手牌除了綠色的單字組以外，<b>剩下的牌只差一張就能湊成單字</b>時，「聽」按鈕會亮起。</li><li>按下「聽」會顯示你聽哪些字母，並在你的頭像旁出現「聽」。</li><li>只剩 1 張沒成組時，可以和另一張牌組成<b>二字母單字(特殊情況)</b>，也能胡牌但台數會大幅降低。</li></ul>
-            <h3>🀄 胡牌</h3><ul><li>聽牌後，別人打出你聽的那張牌，「胡」按鈕會亮成紅色，按下去就胡啦，打出那張牌的人<b>放槍</b>。</li><li>輪到自己摸牌，當手牌全部成單字時，按鈕會變成「<b>自摸</b>」，爽。<b>不會自動胡牌</b>，要自己按亮起的按鈕。</li><li><b>特殊胡</b>：打出一張牌後，如果剩下的手牌<b>全部都是合法單字組</b>（或剛好剩兩張是二字母單字），「胡」按鈕會亮起，按下去就胡（台數較低）。</li><li>結算畫面會公開所有玩家的手牌與碰牌。牌庫摸完仍無人胡牌則為流局。</li></ul>
-            <h3>⚙️ 房間設定（房主）</h3><ul><li><b>允許三個字母的單字</b>：關閉後，三字母單字不算合法單字，只有「最後手牌剩兩張、湊成三字母單字」胡牌時才算數。</li><li><b>每回合限時</b>：輸入秒數（0＝不限時）。輪到的玩家頭像外圈會有<b>黃色倒數圈</b>，快結束時變紅並顯示秒數；時間到會自動出牌。</li></ul>
+            <h3>🀄 胡牌</h3><ul><li>聽牌後，別人打出你聽的那張牌，「胡」按鈕會亮成紅色，按下去就胡啦，打出那張牌的人<b>放槍</b>。</li><li>骰子改成<b>手動擲骰</b>：每位玩家按自己卡片下的「擲骰!」，全部擲完才比大小，同點者再擲。</li><li>輪到自己摸牌，當手牌全部成單字時，按鈕會變成「<b>自摸</b>」，爽。<b>不會自動胡牌</b>，要自己按亮起的按鈕。</li><li><b>特殊胡</b>：只要手牌（不含已碰的牌）只有 16 張、而且<b>全部都是綠色合法單字組</b>（或剛好剩兩張是二字母單字），不管是不是你的回合，「胡」按鈕都會亮起，按下去就胡（台數減半）。</li><li>🔍 放大鏡：拼對了但沒變綠？輸入單字查詢，確認存在就會加入合法單字；不存在會顯示「沒有這個字 你拚對了嗎」。</li><li>結算畫面會公開所有玩家的手牌與碰牌。牌庫摸完仍無人胡牌則為流局。</li></ul>
+            <h3>⚙️ 房間設定（房主）</h3><ul><li><b>允許四個字母的單字</b>：關閉後四字母單字完全不算合法單字。單人練習也能在選單設定三、四字母。</li><li><b>允許三個字母的單字</b>：關閉後，三字母單字不算合法單字，只有「最後手牌剩兩張、湊成三字母單字」胡牌時才算數。</li><li><b>每回合限時</b>：輸入秒數（0＝不限時）。輪到的玩家頭像外圈會有<b>黃色倒數圈</b>，快結束時變紅並顯示秒數；時間到會自動出牌。</li></ul>
             <h3>💬 快捷交流與雞蛋</h3><ul><li>多人模式點自己名字旁的 💬 可發快捷訊息（5 秒內最多 8 則，超過冷卻 3 秒）。</li><li>局內點對手頭像可以丟雞蛋 🥚，純屬娛樂，沒有任何效果。</li><li>在房間裡點玩家頭像可以加對方為好友。</li></ul>
             <h3>🔢 計台</h3><ul><li>每個單字：長度−2台；4 級 +1、5 級 +2、6 級 +3；稀有字母 J、Q、X、Z 各+2，K+1；自摸+5台。</li></ul>
             <h3>🔊 小提示</h3><p>打出的牌會朗讀字母；碰（bang）、聽牌（ready hand）、胡牌（win）、自摸（touch myself）也會朗讀。音效與朗讀可在設定中開關並調整音量，深色模式也會套用在麻將桌。</p></div>
@@ -976,12 +1095,14 @@ const Mahjong = (() => {
         const rows = ents.map(([k, p]) => {
             const host = k === room.host, av = safeAvatar(p.avatar);
             const tag = host ? '<span class="tag-host">👑 房主</span>' : !backOk(p) ? '<span class="tag-wait">👀 查看結果中</span>' : p.ready ? '<span class="tag-ready">✅ 準備就緒</span>' : '<span class="tag-wait">⏳ 稍等一下</span>';
-            return `<div class="room-player"><span class="nm" style="display:flex;align-items:center;gap:8px;"><span class="avatar mj-fav" data-pk="${esc(k)}" title="點擊可加好友" style="width:32px;height:32px;font-size:14px;cursor:pointer;">${av ? `<img src="${esc(av)}" alt="">` : esc((p.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>${esc(p.name)}${k === key ? ' (你)' : ''}</span>${tag}</div>`;
+            const kick = isH && !host ? `<button class="mj-kick" data-kick="${esc(k)}" title="踢出房間">踢出</button>` : '';
+            return `<div class="room-player"><span class="nm" style="display:flex;align-items:center;gap:8px;"><span class="avatar mj-fav" data-pk="${esc(k)}" title="點擊可加好友" style="width:32px;height:32px;font-size:14px;cursor:pointer;">${av ? `<img src="${esc(av)}" alt="">` : esc((p.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>${esc(p.name)}${k === key ? ' (你)' : ''}</span><span style="display:flex;align-items:center;gap:6px">${tag}${kick}</span></div>`;
         }).join('') + (ents.length < MAX_P ? `<div class="room-player"><span class="nm" style="opacity:.5">還可加入 ${MAX_P - ents.length} 位（至少 ${MIN_P} 人才能開始）</span></div>` : '');
-        const a3 = room.cfg ? room.cfg.allow3 !== false : true, ts = room.cfg && room.cfg.turnSec != null ? +room.cfg.turnSec : 30, dis = isH ? '' : 'disabled';
+        const a3 = room.cfg ? room.cfg.allow3 !== false : true, a4 = room.cfg ? room.cfg.allow4 !== false : true, ts = room.cfg && room.cfg.turnSec != null ? +room.cfg.turnSec : 30, dis = isH ? '' : 'disabled';
         const cfg = `<div class="mj-cfg"><label class="field-label">⚙️ 模式設定${isH ? '' : '（由房主設定）'}</label>
             <label class="mj-sw"><input type="checkbox" id="mj-allow3" ${a3 ? 'checked' : ''} ${dis}><span>允許三個字母的單字</span></label>
             <div class="mj-note-l">${a3 ? '' : '關閉時：三字母單字不算合法單字，只有最後手牌剩兩張、湊成三字母單字胡牌時才算數'}</div>
+            <label class="mj-sw"><input type="checkbox" id="mj-allow4" ${a4 ? 'checked' : ''} ${dis}><span>允許四個字母的單字</span></label>
             <div class="mj-sw"><span>每回合限時（秒，0＝不限時）</span><input type="number" id="mj-turn-input" min="0" max="600" inputmode="numeric" value="${ts}" ${dis}></div></div>`;
         return `<div class="mj-lobby room-like"><h1>🀄 英文麻將等待大廳</h1>
             <div class="room-header"><span>房間代碼：</span><span class="room-code">#${esc(code)}</span></div>
@@ -1033,16 +1154,16 @@ const Mahjong = (() => {
         const chips = [
             cm && cm.sent ? `<span class="mj-chip">已送出 ${esc(pending ? pending.word.toUpperCase() : '')}…</span>` : '',
             dec && waits.length ? `<span class="mj-chip ten">🎯 聽：${waits.map(c => c.toUpperCase()).join(' ')}</span>` : '',
-            sp ? '<span class="mj-chip ten">✨ 手牌已全是單字，可以按胡！</span>' : ''
+            sp ? '<span class="mj-chip ten">✨ 手牌已全是單字，可以按胡！（特殊胡・台數減半）</span>' : ''
         ].join('');
         const floats = playing ? `<div class="mj-fl-chips">${chips}</div>
             <div class="mj-fl-row"><button class="btn mj-b ting ${waits.length ? 'lit' : ''}" data-a="ting" ${waits.length ? '' : 'disabled'}>聽${dec ? ' ✓' : ''}</button>
                 <button class="btn mj-b hu ${huLit ? 'lit' : ''}" data-a="hu" ${huLit ? '' : 'disabled'}>${z && selfDraw ? '自摸' : '胡'}</button></div>
-            <div class="mj-fl-row">${cm ? '<button class="btn mj-b cancel" data-a="cmcancel">取消</button>' : `<button class="btn mj-b claim" data-a="claim" ${canPress() ? '' : 'disabled'}>碰</button>`}
+            <div class="mj-fl-row"><button class="btn mj-b mag" data-a="search" title="查字典">🔍</button>${cm ? '<button class="btn mj-b cancel" data-a="cmcancel">取消</button>' : `<button class="btn mj-b claim" data-a="claim" ${canPress() ? '' : 'disabled'}>碰</button>`}
                 <button class="btn mj-b" data-a="sort">整理</button></div>` : '';
         const overlay = !playing ? `<div class="mj-result"><div>${resultHtml()}<div class="mj-res-btns">${solo ? '<button class="btn btn-primary" data-a="again">再來一局</button>' : '<button class="btn btn-primary" data-a="back">🏠 回到房間</button>'}
             <button class="btn btn-secondary" data-a="leave">離開</button></div></div></div>` : '';
-        const cfgTag = (turnSecOf() ? `・限時${turnSecOf()}秒` : '') + (allow3() ? '' : '・無三字單字');
+        const cfgTag = (turnSecOf() ? `・限時${turnSecOf()}秒` : '') + (allow3() ? '' : '・無三字單字') + (allow4() ? '' : '・無四字單字');
         const html = `<div class="mj-game ${myTurn && playing && r.phase === 'discard' && !cm ? 'can-discard' : ''}">
             <div class="mj-felt"></div>
             <button class="btn btn-secondary mj-exit" data-a="leave">離開</button><div class="mj-deck">牌庫 ${(r.deck || '').length}${cfgTag}</div>
@@ -1080,6 +1201,7 @@ const Mahjong = (() => {
         if (a.startsWith('lv:')) { aiLevel = a.slice(3); localStorage.setItem('mj_ai_level', aiLevel); return renderMenu(); }
         if (a === 'create') return create(); if (a === 'join') return join(); if (a === 'exit') return close();
         if (a === 'solo') return startSolo(); if (a === 'multi') return renderEntry(); if (a === 'rules') return renderRules();
+        if (a === 'enter') goFull();
         if (a === 'menu' || a === 'enter') return renderMenu();
         if (a === 'case') { lowerCase = !lowerCase; localStorage.setItem('mj_lowercase', lowerCase ? '1' : '0'); applyCase(); return renderMenu(); }
         if (a === 'invite') return typeof Friends !== 'undefined' ? Friends.openMjInvite(() => code) : null;
@@ -1087,6 +1209,7 @@ const Mahjong = (() => {
         if (!room) return;
         if (a === 'back') { if (room.status !== 'ended') return; return ref.child('players/' + key).update({ back: room.round, ready: false }); } // 每位玩家都能自己回到房間
         if (a === 'chat') return openChat();
+        if (a === 'search') return openSearch();
         if (a === 'ready') { const p = room.players[key]; return ref.child('players/' + key + '/ready').set(!(p && p.ready)); }
         if (a === 'again') {
             return startSolo();
@@ -1100,18 +1223,31 @@ const Mahjong = (() => {
         if (a === 'sort') { sortHand(); render(); }
     };
     body.addEventListener('click', e => {
+        const kb = e.target.closest('[data-kick]');
+        if (kb && room && room.host === key && room.status !== 'playing') { // 房主踢人
+            const k = kb.dataset.kick, p = room.players[k]; if (!p || k === key) return;
+            if (confirm(`要把「${p.name}」請出房間嗎？`)) { ref.child('kicked/' + k).set(true); ref.child('players/' + k).remove(); }
+            return;
+        }
         const fav = e.target.closest('.mj-fav'); if (fav) { playClickSound(); return openPlayerCard(fav.dataset.pk); } // 房間裡點頭像：加好友
         const av = e.target.closest('.mj-avw.tgt');
         if (av && room && room.status === 'playing' && !introing && !drag) return sendEgg(+av.dataset.s); // 局內點對手頭像：丟雞蛋
         const b = e.target.closest('[data-a]'); if (!b || b.disabled) return; playClickSound(); act(b.dataset.a);
     });
+    $('mj-search').addEventListener('click', e => { if (e.target === $('mj-search')) $('mj-search').classList.add('hidden'); });
     $('mj-chatpop').addEventListener('click', e => {
         const b = e.target.closest('[data-chat]');
         if (b) { playClickSound(); if (room && room.status === 'playing') sendChat(+b.dataset.chat); } else if (!e.target.closest('.mj-cp-in')) $('mj-chatpop').classList.add('hidden');
     });
-    body.addEventListener('change', e => { // 房主的模式設定
-        if (!room || room.host !== key || room.status === 'playing') return;
+    body.addEventListener('change', e => {
+        if (e.target.id === 'mj-s3' || e.target.id === 'mj-s4') { // 單人練習設定
+            soloCfg[e.target.id === 'mj-s3' ? 'allow3' : 'allow4'] = !!e.target.checked;
+            try { localStorage.setItem('mjSoloCfg', JSON.stringify(soloCfg)); } catch (err) { }
+            return;
+        }
+        if (!room || room.host !== key || room.status === 'playing') return; // 房主的模式設定
         if (e.target.id === 'mj-allow3') ref.child('cfg/allow3').set(!!e.target.checked);
+        if (e.target.id === 'mj-allow4') ref.child('cfg/allow4').set(!!e.target.checked);
     });
     body.addEventListener('focusout', e => {
         if (e.target.id !== 'mj-turn-input') return;
