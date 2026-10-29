@@ -654,3 +654,32 @@ html.short-screen h1 { font-size: 20px; }
 
 .mj-update { align-self: stretch; max-width: 460px; margin: 0 auto 10px; background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; border-radius: 12px; padding: 8px 12px; font-size: 14px; font-weight: 700; text-align: center; }
 body.dark-mode .mj-update { background: #422006; color: #fde68a; border-color: #854d0e; }
+
+.mj-t.gold { box-shadow: 0 0 0 2px #facc15, 0 0 12px 2px rgba(250, 204, 21, .9); }
+.mj-pc.gold { color: #b45309; background: #fef08a; box-shadow: 0 0 6px #facc15; }
+.mj-conf { position: absolute; top: -40px; z-index: 1990; pointer-events: none; will-change: transform; }
+
+/* ===== v7：設定面板 / 投擲物 / 牌桌主題 ===== */
+.mj-splat { background: radial-gradient(circle at 45% 42%, var(--sc, #fde047) 0 55%, color-mix(in srgb, var(--sc, #fde047) 60%, transparent) 56% 70%, transparent 72%) !important; box-shadow: 0 6px 0 -2px color-mix(in srgb, var(--sc, #fde047) 70%, transparent) !important; }
+#mj-settings { position: absolute; inset: 0; z-index: 1962; background: rgba(0, 0, 0, .45); display: flex; align-items: center; justify-content: center; }
+#mj-settings.hidden { display: none; }
+.mj-set { max-height: 88%; overflow: auto; display: flex; flex-direction: column; gap: 10px; width: min(92%, 460px); }
+.mj-set .mj-cp-h { position: relative; }
+.mj-set-x { position: absolute; right: 0; top: -2px; border: none; background: var(--surface); color: var(--text); border-radius: 10px; padding: 2px 9px; cursor: pointer; font-size: 15px; }
+.mj-set-sec { display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--border); border-radius: 12px; padding: 8px 10px; }
+.mj-th-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 6px; }
+.mj-th { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 4px; border-radius: 12px; border: 2px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
+.mj-th span { font-size: 26px; } .mj-th b { font-size: 12px; } .mj-th i { font-size: 11px; font-style: normal; color: var(--muted); }
+.mj-th.on { border-color: #f59e0b; background: #fef3c7; color: #92400e; } .mj-th.lock { opacity: .55; }
+.mj-cp-grid { max-height: 52vh; overflow: auto; }
+.mj-game[data-felt="blue"] .mj-felt { border-color: #1e3a8a; background: radial-gradient(ellipse at center, #27407a 0%, #0d1a3d 100%); }
+.mj-game[data-felt="pink"] .mj-felt { border-color: #7a2c4a; background: radial-gradient(ellipse at center, #b8577a 0%, #5c2540 100%); }
+.mj-game[data-felt="gold"] .mj-felt { border-color: #b8860b; background: radial-gradient(ellipse at center, #3a3a3a 0%, #0c0c0c 100%); box-shadow: inset 0 0 24px rgba(212, 175, 55, .45); }
+.eco-coinchip { margin-left: 6px; background: #fef3c7; color: #92400e; border-radius: 999px; padding: 1px 8px; font-size: 12px; font-weight: 800; }
+
+/* ===== v8：金幣結算 ===== */
+.mj-coins { background: rgba(250, 204, 21, .14); border: 1px solid rgba(250, 204, 21, .5); border-radius: 12px; padding: 6px 10px; margin: 4px 0 6px; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.mj-coins-h { font-weight: 800; }
+.mj-cl { display: flex; justify-content: space-between; gap: 10px; } .mj-cl.tot { border-top: 1px dashed var(--border); margin-top: 2px; padding-top: 2px; font-weight: 900; }
+.mj-cl b.p, .mj-cd2.p { color: #16a34a; } .mj-cl b.n, .mj-cd2.n { color: #dc2626; }
+.mj-cd2 { margin-left: 6px; font-size: 12px; font-weight: 800; }

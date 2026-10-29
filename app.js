@@ -76,7 +76,7 @@ function showScreen(n) { Object.entries(screens).forEach(([k, el]) => el && el.c
 
 const mainMenuOptions = $('main-menu-options'), singleModeMenu = $('single-mode-menu');
 const multiRoomBox = $('multi-room-box'), practiceSetupBox = $('practice-setup-box');
-const menus = { main: mainMenuOptions, single: singleModeMenu, multi: multiRoomBox, practice: practiceSetupBox };
+const menus = { main: mainMenuOptions, survival: $('survival-menu'), single: singleModeMenu, multi: multiRoomBox, practice: practiceSetupBox };
 function showMenu(n) {
     Object.entries(menus).forEach(([k, el]) => {
         if (!el) return;
@@ -97,6 +97,8 @@ const playerNameInput = {
 };
 const displayRoomCode = $('display-room-code'), playerListContainer = $('player-list');
 const btnCreateRoom = $('btn-create-room'), btnJoinRoom = $('btn-join-room');
+// 有輸入房間代碼時，隱藏「建立房間」避免點錯
+if (roomCodeInput) roomCodeInput.addEventListener('input', () => { if (btnCreateRoom) btnCreateRoom.style.display = roomCodeInput.value.trim() ? 'none' : ''; });
 const btnStartGame = $('btn-start-game'), btnLeaveRoom = $('btn-leave-room'), btnToggleReady = $('btn-toggle-ready');
 const scoreboardEl = $('scoreboard'), currentWordEl = $('current-word');
 const optionsContainerEl = $('options-container'), comboDisplayEl = $('combo-display');
@@ -848,6 +850,7 @@ function recordWrongItem(word, meaning, level, userChosen) {
 }
 
 function buildSummary(headline, lines = []) {
+    if (typeof Economy !== 'undefined') lines = [...lines, `🪙 本局賺了 ${Economy.run()} 金幣`];
     const total = correctCount + wrongCount;
     const rate = total ? (wrongCount / total * 100).toFixed(1) : '0.0';
     return `<div class="summary-box"><div class="summary-title">${headline}</div>
@@ -1199,6 +1202,7 @@ function startBattleGame() {
     clearInterval(gameTimerInterval); clearInterval(secondCounterInterval);
     myHp = 100; myCombo = 0; survivalSeconds = 0; drainIntervalMs = 500;
     correctCount = 0; wrongCount = 0; score = 0;
+    if (typeof Economy !== 'undefined') Economy.runReset(); // 重新計算「本局賺了多少金幣」
     wrongQuestionsList = [];
     singlePlaying = true; isMultiplayerActive = false;
     sessionRecorded = false; sessionStart = Date.now(); sessionMaxCombo = 0;
@@ -1276,6 +1280,7 @@ function handleAnswer(selectedIndex) {
     sessionMaxCombo = Math.max(sessionMaxCombo, myCombo);
     recordBankReview(currentQuestion.word, ok);
     if (hasProfile()) Profile.recordAnswer(currentQuestion, ok, myCombo);
+    if (typeof Economy !== 'undefined') Economy.onAnswer(ok, myCombo);
     flashWord(ok);
     updateComboUI(); updateStatsUI();
     if (!practice) renderScoreboard();
@@ -1344,6 +1349,10 @@ function launchSingleGame() {
 // ==================== 7. 選單按鈕 ====================
 const globalLeaderboardCard = $('global-leaderboard-card');
 
+$('btn-goto-survival').onclick = () => { playClickSound(); showMenu('survival'); if (globalLeaderboardCard) globalLeaderboardCard.style.display = 'none'; };
+$('btn-sv-single').onclick = () => { playClickSound(); showMenu('single'); };
+$('btn-sv-multi').onclick = () => { playClickSound(); showMenu('multi'); };
+$('btn-sv-back').onclick = () => { playClickSound(); showMenu('main'); if (globalLeaderboardCard) globalLeaderboardCard.style.display = 'block'; };
 $('btn-goto-single').onclick = () => { 
     playClickSound(); 
     showMenu('single'); 
@@ -1358,14 +1367,14 @@ $('btn-goto-multi').onclick = () => {
 
 $('btn-back-to-main').onclick = () => { 
     playClickSound(); 
-    showMenu('main'); 
-    if(globalLeaderboardCard) globalLeaderboardCard.style.display = 'block'; // 返回主頁時顯示排行榜
+    showMenu('survival'); // 返回「生存模式」選單
+    if(globalLeaderboardCard) globalLeaderboardCard.style.display = 'none';
 };
 
 $('btn-back-from-multi').onclick = () => { 
     playClickSound(); 
-    showMenu('main'); 
-    if(globalLeaderboardCard) globalLeaderboardCard.style.display = 'block'; // 返回主頁時顯示排行榜
+    showMenu('survival');
+    if(globalLeaderboardCard) globalLeaderboardCard.style.display = 'none';
 };
 $('btn-goto-bank').onclick = () => { playClickSound(); showScreen('bank'); renderBank(); };
 $('btn-start-ranked').onclick = () => { playClickSound(); currentMode = 'ranked'; practiceOrigin = ''; launchSingleGame(); };
@@ -1792,6 +1801,7 @@ function handleMultiplayerAnswer(selectedIndex) {
     sessionMaxCombo = Math.max(sessionMaxCombo, myCombo);
     recordBankReview(currentQuestion.word, isCorrect);
     if (hasProfile()) Profile.recordAnswer(currentQuestion, isCorrect, myCombo);
+    if (typeof Economy !== 'undefined') Economy.onAnswer(isCorrect, myCombo);
     flashWord(isCorrect);   // 與單人模式相同的綠框 / 紅框特效
     updateComboUI();
     if (!isMultiplayerActive) return; // 剛好這一擊結束了遊戲（贏家）或自己被淘汰：不要再出新題蓋掉結算畫面

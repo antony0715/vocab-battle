@@ -22,7 +22,7 @@
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <link rel="icon" type="image/png" href="icon-192.png">
     <title>英語單字King-Vocabulary Battle Royale</title>
-    <link rel="stylesheet" href="style.css?v=12">
+    <link rel="stylesheet" href="style.css?v=17">
 
     <!-- Firebase SDK (Realtime Database) -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -52,9 +52,10 @@
 
             <!-- 主選單 -->
             <div id="main-menu-options" class="menu-col">
-                <button id="btn-goto-single" class="btn btn-primary">單人遊戲</button>
+                <button id="btn-goto-survival" class="btn btn-primary">⚔️ 生存模式</button>
+                <button id="btn-goto-single" style="display:none" aria-hidden="true"></button><button id="btn-goto-multi" style="display:none" aria-hidden="true"></button>
                 <button id="btn-goto-mj" class="btn btn-sky">🀄 英文麻將</button>
-                <button id="btn-goto-multi" class="btn btn-sky">多人生存(測試版)</button>
+                <button id="btn-goto-eco" class="btn btn-secondary">🛒 商店・股票</button>
                 <button id="btn-goto-friends" class="btn btn-secondary" style="position: relative;">
                     👥 我的好友 <span id="friends-badge" class="help-red-dot online-dot hidden">0</span>
                 </button>
@@ -79,6 +80,13 @@
                 <div id="leaderboard-list" class="lb-list">
                     <div class="lb-empty">載入中...</div>
                 </div>
+            </div>
+            <!-- 生存模式：先選單人還是多人 -->
+            <div id="survival-menu" class="submenu hidden">
+                <p class="submenu-title">⚔️ 生存模式</p>
+                <button id="btn-sv-single" class="btn btn-primary">🧍 單人遊戲</button>
+                <button id="btn-sv-multi" class="btn btn-sky">👥 多人生存(測試版)</button>
+                <button id="btn-sv-back" class="btn btn-secondary">返回主選單</button>
             </div>
             <!-- 單人模式子選單 -->
             <div id="single-mode-menu" class="submenu hidden">
@@ -585,12 +593,13 @@
     <!-- 🏅 成就通知 -->
     <div id="toast-root"></div>
 
-    <script src="app.js?v=16"></script>
+    <script src="economy.js?v=5"></script>
+    <script src="app.js?v=18"></script>
     <script src="pwa.js?v=1"></script>
     <script src="profile.js?v=6"></script>
     <script src="friends.js?v=4"></script>
     <script src="mahjong_words.js?v=1"></script>
-    <script src="mahjong.js?v=10"></script>
+    <script src="mahjong.js?v=17"></script>
 </body>
 
 </html>

@@ -22,7 +22,7 @@ const Mahjong = (() => {
     const C = () => AI_CFG[aiLevel];
     const db = firebase.database();
     const MAX_P = 6, MIN_P = 2;
-    const CHAT = ['一群菜逼', '必須得自摸', '手滑啦！', '完了嘛~', '碰一個炸爽', '一切都是昆率','快快快我要胡了'];
+    const CHAT = ['快快快我要胡了', '必須得自摸', '手滑啦！', '完了嘛~', '碰一個炸爽', '一切都是昆率','呃...','神操作 漂亮!'];
     // 座位位置（相對於自己，逆時針）：2 人對面；3 人右上/左上；4 人右/對面/左；5 人右/右上/左上/左；6 人平均分配
     const SLOTS = { 2: ['top'], 3: ['tr', 'tl'], 4: ['right', 'top', 'left'], 5: ['right', 'tr', 'tl', 'left'], 6: ['right', 'tr', 'top', 'tl', 'left'] };
     let serverOffset = 0; // 全部玩家共用「伺服器時間」，避免各裝置時鐘不同造成倒數/換人卡住
@@ -45,6 +45,7 @@ const Mahjong = (() => {
         (typeof mjExtraWords !== 'undefined' ? mjExtraWords : []).forEach(w => { // 麻將專用補充單字（沒有級別，不加級別台數）
             if (w.length >= 3) dict.add(w); else if (w.length === 2) dict2.add(w);
         });
+        sharedWords.forEach(w => dict.add(w));
         try { JSON.parse(localStorage.getItem('mjLearned') || '[]').forEach(w => { if (/^[a-z]{3,}$/.test(w)) dict.add(w); }); } catch (e) { }
         dictList = [...dict];
         anaMap = new Map(); // 排序後的字母 → 單字（AI 判斷「差一張就能湊成單字」用）
@@ -57,8 +58,23 @@ const Mahjong = (() => {
     const lenOk = (w, fin) => w.length === 3 ? (allow3() || !!fin) : w.length === 4 ? allow4() : true;
     const isWordG = w => isWord(w) && lenOk(w, false); // 組成綠色組 / 碰牌用
     const isWordF = w => isWord(w) && lenOk(w, true);  // 最後一個單字（胡牌湊牌）用
-    let soloCfg = { allow3: true, allow4: true };
-    try { Object.assign(soloCfg, JSON.parse(localStorage.getItem('mjSoloCfg') || '{}')); } catch (e) { }
+    let soloCfg = { allow3: true, allow4: true, fun: false };
+    const TH = i => (window.Economy && Economy.THROWS[i]) || { e: '🥚', c: '#fde047' };
+    const feltId = () => (window.Economy && Economy.equipped('felt')) || 'default';
+    const CHAT_PACKS = () => (window.Economy && Economy.CHAT_PACKS) || [];
+    const chatAll = () => CHAT.concat(...CHAT_PACKS().map(p => p.list));
+    const chatAvail = () => { const o = CHAT.map((_, i) => i); let off = CHAT.length; CHAT_PACKS().forEach(p => { if (Economy.owned(p.id)) p.list.forEach((_, k) => o.push(off + k)); off += p.list.length; }); return o; };
+    const funOn = () => !!(room && room.cfg && room.cfg.fun === true && room.gold);
+    const sharedWords = new Set(); // 玩家查證過的單字（存在雲端 mjWords，所有玩家共用）
+    function learnWord(w) {
+        if (!/^[a-z]{3,}$/.test(w)) return;
+        sharedWords.add(w);
+        if (dict && !dict.has(w)) {
+            dict.add(w); dictList.push(w); if (w.length <= 8) anaMap.set([...w].sort().join(''), w);
+            waitCache = { k: '', v: [] }; if (room && ref) safe(render);
+        }
+    }
+    try { Object.assign(soloCfg, JSON.parse(localStorage.getItem('mjSoloCfg') || '{}')); } catch (e) { } soloCfg.fun = false;
     const turnSecOf = () => (room && room.cfg && +room.cfg.turnSec) || 0;
     const NP = () => (room && room.np) || 4;
     function zhOf(w) { // 單字的中文意思（從單字庫取第一個含中文的欄位）
@@ -162,7 +178,7 @@ const Mahjong = (() => {
 
     const root = document.createElement('div');
     root.id = 'mj-screen'; root.className = 'mj hidden';
-    root.innerHTML = '<div class="mj-rot">📱 請將手機橫放，才能玩英文麻將</div><div id="mj-body"></div><div id="mj-toast"></div><div id="mj-hint"></div><div id="mj-myturn">你的回合</div><div id="mj-chatpop" class="hidden"></div><div id="mj-search" class="hidden"></div>';
+    root.innerHTML = '<div class="mj-rot">📱 請將手機橫放，才能玩英文麻將</div><div id="mj-body"></div><div id="mj-toast"></div><div id="mj-hint"></div><div id="mj-myturn">你的回合</div><div id="mj-chatpop" class="hidden"></div><div id="mj-search" class="hidden"></div><div id="mj-settings" class="hidden"></div>';
     document.body.appendChild(root);
     const body = root.querySelector('#mj-body');
     const hint = m => { const h = $('mj-hint'); if (!h) return; h.textContent = m; h.classList.add('on'); clearTimeout(hint.t); hint.t = setTimeout(() => h.classList.remove('on'), 2800); };
@@ -230,7 +246,7 @@ const Mahjong = (() => {
         if (drag) { const d = drag; drag = null; if (d.on) dropGhost(d); }
         introToken++; introing = false; root.querySelectorAll('.mj-intro,.mj-fly').forEach(x => x.remove());
         if (ref) ref.off(); ref = null; room = null; mySeat = -1; curRound = null; solo = false; cm = null; pending = null;
-        stopTimers(); chatMsg = {}; splats = {}; lastTurnTok = ''; chatSeen = {}; $('mj-chatpop').classList.add('hidden'); $('mj-search').classList.add('hidden'); root.classList.remove('in-game'); renderMenu();
+        stopTimers(); chatMsg = {}; splats = {}; lastTurnTok = ''; chatSeen = {}; $('mj-chatpop').classList.add('hidden'); $('mj-search').classList.add('hidden'); $('mj-settings').classList.add('hidden'); root.classList.remove('in-game'); renderMenu();
     }
     function leave() {
         if (ref && room && !solo) {
@@ -279,7 +295,7 @@ const Mahjong = (() => {
     }
     function maybeDraw() {
         if (room.status === 'playing' && room.phase === 'draw' && room.turn === mySeat && !introing && now() >= (room.introEnd || 0))
-            draw(mySeat, ch => { addTile(ch); drawnId = nextId - 1; drawFly = true; selfDraw = true; sfx('draw'); render(); });
+            draw(mySeat, ch => { addTile(ch); drawnId = nextId - 1; drawFly = true; selfDraw = true; sfx('draw'); render(); if (funOn() && ch === room.gold) { toast(`🌟 摸到金牌字母 ${ch.toUpperCase()}！胡牌有加台`); confetti(['🌟', '✨'], 18); } });
     }
     function autoTurn() { // 每回合限時：時間到自動出牌（優先打剛摸到的牌）
         const sec = turnSecOf();
@@ -310,7 +326,7 @@ const Mahjong = (() => {
     function create() {
         key = safeKey(myName());
         const c = String(Math.floor(1000 + Math.random() * 9000)), r = db.ref('mj/' + c);
-        r.transaction(cur => cur ? undefined : { host: key, status: 'lobby', cfg: { allow3: true, allow4: true, turnSec: 30 }, players: { [key]: { name: myName(), seat: 0, ready: true, code: myCode() } } },
+        r.transaction(cur => cur ? undefined : { host: key, status: 'lobby', cfg: { allow3: true, allow4: true, fun: false, money: false, turnSec: 30 }, players: { [key]: { name: myName(), seat: 0, ready: true, code: myCode() } } },
             (err, ok) => ok ? enter(c) : toast('建立失敗，請再試一次'));
     }
     function join() { joinCode(($('mj-code').value || '').trim()); }
@@ -362,16 +378,16 @@ const Mahjong = (() => {
         return { rounds, start: con[0] };
     }
     const introLen = n => 2550 + n * 2300 + 1500 + 3150 + 1700; // 開場動畫大約多久（讓首位玩家等大家都播完才摸牌）
-    const freshFields = { claims: null, claimed: null, melds: null, result: null, tings: null, reveal: null, last: null, chat: null, egg: null, pile: '', n: 0, claimEnd: 0, claimBase: 0, claimExt: false, turnEnd: 0, startAt: 0, introEnd: 0, shufAt: 0, phase: 'draw' };
+    const freshFields = { claims: null, claimed: null, melds: null, result: null, tings: null, reveal: null, last: null, chat: null, egg: null, pile: '', n: 0, claimEnd: 0, claimBase: 0, claimExt: false, turnEnd: 0, startAt: 0, introEnd: 0, shufAt: 0, gold: '', phase: 'draw' };
     function startGame() { // 多人：房主
         const ents = Object.entries(room.players || {}).sort((a, b) => a[1].seat - b[1].seat), np = ents.length;
         if (np < MIN_P || np > MAX_P) return toast('需要 2~6 位玩家才能開始');
         if (ents.some(([k, p]) => k !== room.host && (!p.ready || (room.status === 'ended' && p.back !== room.round)))) return toast('還有玩家沒準備好');
-        const deck = makeDeck(), hands = {}, u = {};
+        const deck = makeDeck(), hands = {}, u = {}, gold = room.cfg && room.cfg.fun ? deck[Math.floor(Math.random() * deck.length)] : '';
         for (let s = 0; s < np; s++) hands[s] = deck.splice(0, 16).join('');
         ents.forEach(([k], i) => { u['players/' + k + '/seat'] = i; }); // 座位重新排成 0 ~ np-1
         const startAt = now() + 1500;
-        ref.update({ ...u, ...freshFields, np, status: 'playing', round: Date.now(), deck: deck.join(''), hands, counts: Array(np).fill(16), turn: -1, phase: 'dice', dice: { rd: 0, seats: ents.map((_, i) => i), rolls: null, hist: null }, shufAt: 0, startAt, introEnd: 0 });
+        ref.update({ ...u, ...freshFields, np, status: 'playing', round: Date.now(), deck: deck.join(''), hands, counts: Array(np).fill(16), gold, turn: -1, phase: 'dice', dice: { rd: 0, seats: ents.map((_, i) => i), rolls: null, hist: null }, shufAt: 0, startAt, introEnd: 0 });
     }
     function startSolo() { // 單人：我 + 3 位 AI（名字隨機）
         buildDict();
@@ -381,13 +397,13 @@ const Mahjong = (() => {
         key = safeKey(myName());
         const mine = myName().toLowerCase();
         const pool = AI_NAMES.filter(n => n.toLowerCase() !== mine).sort(() => Math.random() - .5).slice(0, 3);
-        const deck = makeDeck(), hs = [], d = rollDice(4);
+        const deck = makeDeck(), hs = [], d = rollDice(4), gold = soloCfg.fun ? deck[Math.floor(Math.random() * deck.length)] : '';
         for (let s = 0; s < 4; s++) hs.push(deck.splice(0, 16));
         aiHands = { 1: hs[1], 2: hs[2], 3: hs[3] }; aiPending = {}; aiTing = {};
         const players = { [key]: { name: myName(), seat: 0, ready: true } };
         pool.forEach((n, i) => { players['ai' + (i + 1)] = { name: n, seat: i + 1, ai: true, ready: true }; });
         solo = true; code = 'SOLO'; curRound = null;
-        ref = localRef({ ...freshFields, host: key, np: 4, cfg: { allow3: soloCfg.allow3, allow4: soloCfg.allow4, turnSec: 0 }, status: 'playing', round: Date.now(), players, deck: deck.join(''), hands: { 0: hs[0].join('') }, counts: [16, 16, 16, 16], turn: d.start, dice: d.rounds });
+        ref = localRef({ ...freshFields, host: key, np: 4, cfg: { allow3: soloCfg.allow3, allow4: soloCfg.allow4, turnSec: 0, fun: !!soloCfg.fun }, gold, status: 'playing', round: Date.now(), players, deck: deck.join(''), hands: { 0: hs[0].join('') }, counts: [16, 16, 16, 16], turn: d.start, dice: d.rounds });
         ref.on('value', onRoom);
         sendAvatar();
         startCountdown();
@@ -425,6 +441,7 @@ const Mahjong = (() => {
         safe(() => {
             if (room.last && room.last.n !== lastSpokenN && room.phase === 'claim') { // 打出的牌：音效 + 朗讀字母
                 lastSpokenN = room.last.n; sfx('discard'); speakWord(SAY[room.last.ch] || room.last.ch);
+                if (funOn() && room.last.n % 8 === 0) { const ev = FUN_EV[(room.last.n / 8) % FUN_EV.length]; hint(`${ev[0]} ${ev[1]}！`); confetti([ev[0]], 24); }
             }
         });
         safe(() => Object.keys(room.tings || {}).forEach(s => { // 有人宣告聽牌
@@ -449,8 +466,8 @@ const Mahjong = (() => {
         if (diceUI) safe(diceUI.update);
         safe(() => { // 快捷交流 / 丟雞蛋（全部玩家都看得到）
             const ch = room.chat || {};
-            Object.keys(ch).forEach(s => { const c = ch[s]; if (!c || chatSeen[s] === c.k) return; chatSeen[s] = c.k; if (now() - (c.ts || 0) < 4000 && CHAT[c.i]) showChat(+s, CHAT[c.i]); });
-            const e = room.egg; if (e && e.k !== lastEggK) { lastEggK = e.k; if (now() - (e.ts || 0) < 4000 && room.status === 'playing') throwEgg(e.from, e.to); }
+            Object.keys(ch).forEach(s => { const c = ch[s]; if (!c || chatSeen[s] === c.k) return; chatSeen[s] = c.k; if (now() - (c.ts || 0) < 4000 && chatAll()[c.i]) showChat(+s, chatAll()[c.i]); });
+            const e = room.egg; if (e && e.k !== lastEggK) { lastEggK = e.k; if (now() - (e.ts || 0) < 4000 && room.status === 'playing') throwEgg(e.from, e.to, e.e | 0); }
         });
 
         if (room.status !== 'playing' && drag) { const d = drag; drag = null; if (d.on) dropGhost(d); }
@@ -484,6 +501,16 @@ const Mahjong = (() => {
             return r;
         });
     }
+    const FUN_EV = [['🍬', '糖果雨'], ['🎈', '氣球派對'], ['🌸', '櫻花紛飛'], ['⭐', '流星雨'], ['🍕', '披薩雨'], ['🐥', '小雞大遊行']];
+    function confetti(list, n = 26) { // 娛樂模式：表情雨
+        for (let i = 0; i < n; i++) {
+            const e = document.createElement('div'); e.className = 'mj-conf'; e.textContent = list[i % list.length];
+            e.style.left = (Math.random() * 96) + '%'; e.style.fontSize = (18 + Math.random() * 18) + 'px'; root.appendChild(e);
+            const dur = 1800 + Math.random() * 1800, dx = (Math.random() - .5) * 80;
+            const a = e.animate([{ transform: 'translate(0,0) rotate(0)', opacity: 1 }, { transform: `translate(${dx}px, ${root.clientHeight + 60}px) rotate(${Math.random() * 720 - 360}deg)`, opacity: .9 }], { duration: dur, delay: Math.random() * 500, easing: 'ease-in', fill: 'forwards' });
+            a.onfinish = () => e.remove();
+        }
+    }
     function showMyTurn() { // 輪到自己：畫面中央大字「你的回合」約 2 秒
         if (introing || room.turn !== mySeat || (room.phase !== 'draw' && room.phase !== 'discard')) return;
         const tok = room.round + '|' + room.n + '|' + room.turn; if (tok === lastTurnTok) return; lastTurnTok = tok;
@@ -505,17 +532,17 @@ const Mahjong = (() => {
     }
     function sendEgg(to) {
         if (Date.now() - lastEggAt < 900) return; lastEggAt = Date.now();
-        ref.child('egg').set({ from: mySeat, to, k: key + Date.now(), ts: now() });
+        ref.child('egg').set({ from: mySeat, to, e: window.Economy ? Economy.throwIdx() : 0, k: key + Date.now(), ts: now() });
     }
-    function throwEgg(from, to) { // 雞蛋從丟的人飛到被丟的人頭像（純娛樂，沒有任何效果）
+    function throwEgg(from, to, emo) { // 雞蛋從丟的人飛到被丟的人頭像（純娛樂，沒有任何效果）
         const a = root.querySelector(`.mj-avw[data-s="${from}"]`), b = root.querySelector(`.mj-avw[data-s="${to}"]`); if (!a || !b) return;
         const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
         const sx = ra.left + ra.width / 2, sy = ra.top + ra.height / 2, tx = rb.left + rb.width / 2, ty = rb.top + rb.height / 2;
-        const e = document.createElement('div'); e.className = 'mj-egg'; e.textContent = '🥚'; root.appendChild(e); sfx('throw');
+        const e = document.createElement('div'); const th = TH(emo); e.className = 'mj-egg'; e.textContent = th.e; root.appendChild(e); sfx('throw');
         const pos = (x, y, r) => `translate(${x}px,${y}px) translate(-50%,-50%) rotate(${r}deg)`;
         const an = e.animate([{ transform: pos(sx, sy, 0) }, { transform: pos((sx + tx) / 2, Math.min(sy, ty) - 80, 360) }, { transform: pos(tx, ty, 720) }], { duration: 700, easing: 'ease-in-out', fill: 'forwards' });
         an.onfinish = () => {
-            e.remove(); sfx('splat'); splats[to] = true; render();
+            e.remove(); sfx('splat'); splats[to] = th; render();
             setTimeout(() => { delete splats[to]; render(); }, 2600);
         };
     }
@@ -541,15 +568,29 @@ const Mahjong = (() => {
             const res = await fetch('https://api.dictionaryapi.dev/api/v2/entries/en/' + encodeURIComponent(w));
             if (res.status === 404) { m.className = 'mj-smsg err'; m.textContent = '沒有這個字 你拚對了嗎'; return; }
             if (!res.ok) throw new Error(res.status);
-            dict.add(w); dictList.push(w); if (w.length <= 8) anaMap.set([...w].sort().join(''), w); waitCache = { k: '', v: [] };
+            learnWord(w); if (window.Economy) Economy.onWord();
+            let cloud = true;
+            try { await db.ref('mjWords/' + w).set({ by: myName(), ts: firebase.database.ServerValue.TIMESTAMP }); } catch (e) { cloud = false; }
             try { const L = JSON.parse(localStorage.getItem('mjLearned') || '[]'); if (!L.includes(w)) { L.push(w); localStorage.setItem('mjLearned', JSON.stringify(L.slice(-300))); } } catch (e) { }
-            m.className = 'mj-smsg ok'; m.textContent = `✅ ${w.toUpperCase()} 存在！手牌中的這組字已變為合法單字`;
-            if (room && ref) render();
+            m.className = 'mj-smsg ok'; m.textContent = cloud ? `✅ ${w.toUpperCase()} 存在！已加入麻將單字庫，所有玩家都能用` : `✅ ${w.toUpperCase()} 存在！已加入你的單字庫（雲端寫入失敗，只有你能用）`;
         } catch (e) { m.className = 'mj-smsg err'; m.textContent = '查詢失敗，請檢查網路連線'; }
+    }
+    function openSettings() { // 設定彈跳面板：單人練習規則 + 要丟的東西
+        const p = $('mj-settings'), E = window.Economy;
+        const ths = E ? E.THROWS.map((t, i) => { const have = E.owned(t.id), on = E.equipped('throw') === t.id;
+            return `<button class="mj-th ${on ? 'on' : ''} ${have ? '' : 'lock'}" data-th="${t.id}" title="${have ? '' : '到商店購買'}"><span>${t.e}</span><b>${esc(t.name)}</b><i>${on ? '使用中' : have ? '點擊裝備' : '🔒 🪙' + t.price}</i></button>`; }).join('') : '';
+        p.innerHTML = `<div class="mj-cp-in mj-set"><div class="mj-cp-h">⚙️ 設定 <button class="mj-set-x" data-x="1">✕</button></div>
+            <div class="mj-set-sec"><b>🤖 單人練習規則</b>
+                <label class="mj-sw"><input type="checkbox" id="mj-s3" ${soloCfg.allow3 ? 'checked' : ''}><span>允許三個字母的單字</span></label>
+                <label class="mj-sw"><input type="checkbox" id="mj-s4" ${soloCfg.allow4 ? 'checked' : ''}><span>允許四個字母的單字</span></label></div>
+            <div class="mj-set-sec"><b>🎯 要丟的東西（局內點對手頭像）</b><div class="mj-th-grid">${ths}</div>
+                <button class="btn btn-secondary" data-shop="1" style="margin-top:6px">🛒 去商店買更多</button></div>
+            <button class="btn btn-primary" data-x="1">完成</button></div>`;
+        p.classList.remove('hidden');
     }
     function openChat() {
         const p = $('mj-chatpop');
-        p.innerHTML = `<div class="mj-cp-in"><div class="mj-cp-h">💬 快捷交流</div><div class="mj-cp-grid">${CHAT.map((t, i) => `<button data-chat="${i}">${esc(t)}</button>`).join('')}</div></div>`;
+        p.innerHTML = `<div class="mj-cp-in"><div class="mj-cp-h">💬 快捷交流</div><div class="mj-cp-grid">${chatAvail().map(i => `<button data-chat="${i}">${esc(chatAll()[i])}</button>`).join('')}</div></div>`;
         p.classList.remove('hidden');
     }
     function openPlayerCard(pk) { // 房間裡點頭像 → 加好友
@@ -561,10 +602,12 @@ const Mahjong = (() => {
         const res = room.result || {};
         if (!res.aborted && winSfxRound !== room.round) {
             winSfxRound = room.round;
+            if (window.Economy) { const cc = coinCalc(res.draw ? { draw: true } : res); Economy.add(cc.total < 0 ? Math.max(cc.total, -Economy.coins()) : cc.total, '麻將金幣結算'); }
             if (res.draw) { if (typeof Profile !== 'undefined' && Profile.mjRecord) Profile.mjRecord({ type: 'end', win: false }); return finishEnded(); }
             // 贏家聽到 win（自摸則 touch myself），其他玩家聽到 game over
             if (res.seat === mySeat) { speakWord(res.self ? 'touch myself' : 'win'); sfx('win'); }
             else { speakWord('game over'); sfx('ting'); }
+            if (funOn()) confetti(res.seat === mySeat ? ['🎉', '🎊', '✨'] : ['🎊'], 40);
             if (typeof Profile !== 'undefined' && Profile.mjRecord) {
                 const win = res.seat === mySeat;
                 if (win && res.tai > 0 && (!solo || aiLevel !== 'easy') && typeof uploadRecord === 'function' && typeof mjRef !== 'undefined') uploadRecord(mjRef, myName(), res.tai); // 麻將台數榜（單人簡單難度不計）
@@ -769,6 +812,10 @@ const Mahjong = (() => {
     function declareWin(seat, words, self, two, from, n, special) {
         const sc = score(words, self, two, special), name = seatName(seat);
         if (special) sc.lines.push('特殊胡：手牌全部是合法單字組（不必等到出牌）');
+        if (funOn()) { // 娛樂模式：金牌字母每個 +2 台（最多 +10）
+            const g = room.gold, n = words.join('').split(g).length - 1;
+            if (n > 0) { const b = Math.min(n * 2, 10); sc.tai += b; sc.lines.push(`🌟 金牌字母 ${g.toUpperCase()} ×${n}：+${b} 台`); }
+        }
         if (room && room.cfg && room.cfg.allow3 === false) sc.lines.push('本局不允許三字母單字（僅最後湊牌可用）');
         if (room && room.cfg && room.cfg.allow4 === false) sc.lines.push('本局不允許四字母單字');
         ref.transaction(r => {
@@ -886,7 +933,7 @@ const Mahjong = (() => {
         const ting = room && room.tings && room.tings[s];
         const tgt = room && room.status === 'playing' && s !== mySeat && !introing;
         return `<div class="mj-avw ${tgt ? 'tgt' : ''}" data-s="${s}">${turn ? `<span class="mj-ring" data-s="${s}"></span>` : ''}<div class="mj-av ${size} ${turn ? 'turn' : ''}" title="${esc(nm)}"${st}>${a ? `<img src="${esc(a)}" alt="">` : esc(nm.trim().charAt(0).toUpperCase() || '?')}</div>`
-            + `${turn ? `<span class="mj-sec" data-s="${s}"></span>` : ''}${splats[s] ? '<span class="mj-splat"></span>' : ''}${ting ? '<span class="mj-ting">聽</span>' : ''}${callouts[s] ? `<span class="mj-callout">${esc(callouts[s])}</span>` : ''}</div>`;
+            + `${turn ? `<span class="mj-sec" data-s="${s}"></span>` : ''}${splats[s] ? `<span class="mj-splat" style="--sc:${splats[s].c}"></span>` : ''}${ting ? '<span class="mj-ting">聽</span>' : ''}${callouts[s] ? `<span class="mj-callout">${esc(callouts[s])}</span>` : ''}</div>`;
     }
 
     // ---------- 開場：倒數 3-2-1 → 擲骰決定誰先開始 → 洗牌 → 把牌抽進手牌區 ----------
@@ -1018,10 +1065,9 @@ const Mahjong = (() => {
             <p class="mj-note">用字母牌拼出單字，最先把手牌全部拼成單字的人胡牌！<br>請使用橫向全螢幕。目前暱稱：<b>${esc(myName())}</b></p>
             <div class="mj-lv" title="電腦難度">🤖 電腦難度
                 ${Object.entries(AI_CFG).map(([k, v]) => `<button class="${k === aiLevel ? 'on' : ''}" data-a="lv:${k}">${v.name}</button>`).join('')}</div>
-            <div class="mj-cfg" style="max-width:360px;width:100%"><label class="mj-sw"><input type="checkbox" id="mj-s3" ${soloCfg.allow3 ? 'checked' : ''}><span>允許三個字母的單字</span></label>
-                <label class="mj-sw"><input type="checkbox" id="mj-s4" ${soloCfg.allow4 ? 'checked' : ''}><span>允許四個字母的單字</span></label></div>
             <button class="btn btn-primary" data-a="solo">🤖 單人練習（與 3 位 AI 對戰・組牌不限時）</button>
             <button class="btn btn-sky" data-a="multi">👥 多人房間（2~6 位玩家）</button>
+            <div class="mj-row2"><button class="btn btn-secondary" data-a="settings">⚙️ 設定</button><button class="btn btn-secondary" data-a="shop">🛒 商店・股票 </button></div>
             <button class="btn btn-secondary" data-a="rules">📖 麻將規則說明</button>
             <button class="btn btn-secondary" data-a="case">牌面字母：${lowerCase ? '小寫 (abc)' : '大寫 (ABC)'}（點擊切換）</button>
             <button class="btn btn-secondary" data-a="exit">返回主選單</button></div>`;
@@ -1041,7 +1087,7 @@ const Mahjong = (() => {
             <h3>✋ 碰</h3><ul><li>別人打出一張牌後，其他三位玩家有<b>6 秒</b>可以按「碰」。</li><li>有人按碰時，總倒數會<b>再加 10 秒</b>。</li><li>按下去後會出現<b>組牌區</b>：把手牌拖進去，和被打出的那張牌手動組成單字；組成單字成功時底下會變綠色，記得按右下角的 ✓ 送出。</li><li>組不出單字？再按一次「取消」，牌會放回手牌區，而且這一輪不能再碰。</li><li>所有人都送出或時間到後，<b>單字最長者優先</b>。碰到的單字會公開擺在你前方的牌桌上，然後由你打出一張牌。</li></ul>
             <h3>🎯 聽牌</h3><ul><li>當手牌除了綠色的單字組以外，<b>剩下的牌只差一張就能湊成單字</b>時，「聽」按鈕會亮起。</li><li>按下「聽」會顯示你聽哪些字母，並在你的頭像旁出現「聽」。</li><li>只剩 1 張沒成組時，可以和另一張牌組成<b>二字母單字(特殊情況)</b>，也能胡牌但台數會大幅降低。</li></ul>
             <h3>🀄 胡牌</h3><ul><li>聽牌後，別人打出你聽的那張牌，「胡」按鈕會亮成紅色，按下去就胡啦，打出那張牌的人<b>放槍</b>。</li><li>骰子改成<b>手動擲骰</b>：每位玩家按自己卡片下的「擲骰!」，全部擲完才比大小，同點者再擲。</li><li>輪到自己摸牌，當手牌全部成單字時，按鈕會變成「<b>自摸</b>」，爽。<b>不會自動胡牌</b>，要自己按亮起的按鈕。</li><li><b>特殊胡</b>：只要手牌（不含已碰的牌）只有 16 張、而且<b>全部都是綠色合法單字組</b>（或剛好剩兩張是二字母單字），不管是不是你的回合，「胡」按鈕都會亮起，按下去就胡（台數減半）。</li><li>🔍 放大鏡：拼對了但沒變綠？輸入單字查詢，確認存在就會加入合法單字；不存在會顯示「沒有這個字 你拚對了嗎」。</li><li>結算畫面會公開所有玩家的手牌與碰牌。牌庫摸完仍無人胡牌則為流局。</li></ul>
-            <h3>⚙️ 房間設定（房主）</h3><ul><li><b>允許四個字母的單字</b>：關閉後四字母單字完全不算合法單字。單人練習也能在選單設定三、四字母。</li><li><b>允許三個字母的單字</b>：關閉後，三字母單字不算合法單字，只有「最後手牌剩兩張、湊成三字母單字」胡牌時才算數。</li><li><b>每回合限時</b>：輸入秒數（0＝不限時）。輪到的玩家頭像外圈會有<b>黃色倒數圈</b>，快結束時變紅並顯示秒數；時間到會自動出牌。</li></ul>
+            <h3>⚙️ 房間設定（房主）</h3><ul><li><b>🎉 娛樂模式</b>：開局隨機抽出一個「金牌字母」🌟（牌面會發光）。胡牌時單字中每有一個金牌字母 +2 台（最多 +10）；摸到金牌字母、每打 8 張牌、遊戲結束都會有表情雨特效。單人練習在選單勾選，多人由房主在房間設定。</li><li><b>💰 玩錢</b>（多人房主可開）：自摸時其他玩家各付贏家金幣，放槍胡則只由放槍的人付；金額依牌型而定，結算畫面會列出。</li><li><b>允許四個字母的單字</b>：關閉後四字母單字完全不算合法單字。單人練習也能在選單設定三、四字母。</li><li><b>允許三個字母的單字</b>：關閉後，三字母單字不算合法單字，只有「最後手牌剩兩張、湊成三字母單字」胡牌時才算數。</li><li><b>每回合限時</b>：輸入秒數（0＝不限時）。輪到的玩家頭像外圈會有<b>黃色倒數圈</b>，快結束時變紅並顯示秒數；時間到會自動出牌。</li></ul>
             <h3>💬 快捷交流與雞蛋</h3><ul><li>多人模式點自己名字旁的 💬 可發快捷訊息（5 秒內最多 8 則，超過冷卻 3 秒）。</li><li>局內點對手頭像可以丟雞蛋 🥚，純屬娛樂，沒有任何效果。</li><li>在房間裡點玩家頭像可以加對方為好友。</li></ul>
             <h3>🔢 計台</h3><ul><li>每個單字：長度−2台；4 級 +1、5 級 +2、6 級 +3；稀有字母 J、Q、X、Z 各+2，K+1；自摸+5台。</li></ul>
             <h3>🔊 小提示</h3><p>打出的牌會朗讀字母；碰（bang）、聽牌（ready hand）、胡牌（win）、自摸（touch myself）也會朗讀。音效與朗讀可在設定中開關並調整音量，深色模式也會套用在麻將桌。</p></div>
@@ -1070,20 +1116,41 @@ const Mahjong = (() => {
     const tileHtml = (c, cls = '') => `<b class="${vowel(c) ? 'v' : ''} ${cls}">${c.toUpperCase()}</b>`;
     const meldHtml = s => meldsOf(s).map(w => `<div class="mj-meld">${[...w].map(c => tileHtml(c)).join('')}</div>`).join('');
 
+    // 金幣結算：每位玩家各自的金幣變化 + 自己的明細。玩錢：自摸 → 其他人各付；放槍 → 放槍者付
+    function coinBox(cc) {
+        return `<div class="mj-coins"><div class="mj-coins-h">🪙 本局金幣</div>${cc.mine.map(([l, n]) => `<div class="mj-cl"><span>${l}</span><b class="${n >= 0 ? 'p' : 'n'}">${n >= 0 ? '+' : ''}${n}</b></div>`).join('')}<div class="mj-cl tot"><span>合計</span><b class="${cc.total >= 0 ? 'p' : 'n'}">${cc.total >= 0 ? '+' : ''}${cc.total} 🪙</b></div></div>`;
+    }
+    function coinCalc(res) {
+        const np = NP(), money = !solo && !!(room.cfg && room.cfg.money), t = Math.min(30, res.tai || 0), unit = 10 + t * 5, delta = {}, mine = [];
+        for (let s = 0; s < np; s++) {
+            const win = !res.draw && s === res.seat; let d = win ? (solo ? 25 : 40) : (solo ? 6 : 12);
+            if (s === mySeat) mine.push(win ? ['🏆 胡牌獎勵', d] : ['🎮 參與獎勵', d]);
+            if (win) { const b = t * (solo ? 3 : 4); d += b; if (s === mySeat) mine.push(['🧩 牌型加成', b]); }
+            delta[s] = d;
+        }
+        if (money && !res.draw) {
+            const payers = res.self ? Array.from({ length: np }, (_, s) => s).filter(s => s !== res.seat) : (res.from != null ? [res.from] : []);
+            payers.forEach(s => { delta[s] -= unit; delta[res.seat] += unit; });
+            if (res.seat === mySeat) mine.push([res.self ? `💰 玩錢：自摸，${payers.length} 家各付 ${unit}` : `💰 玩錢：${esc(seatName(res.from))} 放槍付 ${unit}`, unit * payers.length]);
+            else if (payers.includes(mySeat)) mine.push([res.self ? `💸 玩錢：${esc(seatName(res.seat))} 自摸，你付 ${unit}` : `💸 玩錢：你放槍，付給 ${esc(seatName(res.seat))} ${unit}`, -unit]);
+        }
+        return { delta, mine, total: delta[mySeat], money };
+    }
     function resultHtml() {
         const res = room.result || {};
         if (res.aborted) return `<h2>⚠️ ${esc(res.name)} 離開了遊戲</h2>`;
-        if (res.draw) return '<h2>🤝 牌庫已空，流局</h2>';
+        if (res.draw) return `<h2>🤝 牌庫已空，流局</h2>${coinBox(coinCalc(res))}`;
+        const cdl = coinCalc(res).delta;
         const rows = Array.from({ length: NP() }, (_, s) => s).map(s => {
             const win = s === res.seat, from = !res.self && res.from === s, ms = meldsOf(s);
             let hands;
             if (win) hands = (res.words || []).slice(0, (res.words || []).length - ms.length).map(w => `<span class="mj-rw">${[...w].map(c => tileHtml(c, 'g')).join('')}</span>`).join('');
             else { const h = (room.reveal && room.reveal[s]) || ''; hands = h === '-' ? '' : `<span class="mj-rw">${[...h].map(c => tileHtml(c)).join('')}</span>`; }
-            return `<div class="mj-rr ${win ? 'w' : ''}"><div class="mj-rn">${avHtml(s, 's')}<b>${esc(seatName(s))}</b>${win ? '<span class="mj-tag w">🏆 贏家</span>' : ''}${from ? '<span class="mj-tag f">💥 放槍</span>' : ''}</div>
+            return `<div class="mj-rr ${win ? 'w' : ''}"><div class="mj-rn">${avHtml(s, 's')}<b>${esc(seatName(s))}</b>${win ? '<span class="mj-tag w">🏆 贏家</span>' : ''}${from ? '<span class="mj-tag f">💥 放槍</span>' : ''}${cdl ? `<span class="mj-cd2 ${cdl[s] >= 0 ? 'p' : 'n'}">${cdl[s] >= 0 ? '+' : ''}${cdl[s]} 🪙</span>` : ''}</div>
                 <div class="mj-rt">${hands}${ms.length ? `<span class="mj-rw m">${ms.map(w => [...w].map(c => tileHtml(c, 'b')).join('')).join('<i></i>')}</span>` : ''}</div></div>`;
         }).join('');
-        return `<h2>🏆 ${esc(res.name)} ${res.self ? '自摸' : '胡牌'}！<span class="mj-tai">${res.tai} 台</span></h2>
-            <div class="mj-lines">${(res.lines || []).map(l => `<span>${esc(l)}</span>`).join('')}</div>${rows}`;
+        const cc = coinCalc(res), fm = n => (n >= 0 ? '+' : '') + n;
+        return `<h2>🏆 ${esc(res.name)} ${res.self ? '自摸' : '胡牌'}！</h2>${coinBox(cc)}${rows}`;
     }
 
     function lobbyHtml() {
@@ -1098,11 +1165,12 @@ const Mahjong = (() => {
             const kick = isH && !host ? `<button class="mj-kick" data-kick="${esc(k)}" title="踢出房間">踢出</button>` : '';
             return `<div class="room-player"><span class="nm" style="display:flex;align-items:center;gap:8px;"><span class="avatar mj-fav" data-pk="${esc(k)}" title="點擊可加好友" style="width:32px;height:32px;font-size:14px;cursor:pointer;">${av ? `<img src="${esc(av)}" alt="">` : esc((p.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>${esc(p.name)}${k === key ? ' (你)' : ''}</span><span style="display:flex;align-items:center;gap:6px">${tag}${kick}</span></div>`;
         }).join('') + (ents.length < MAX_P ? `<div class="room-player"><span class="nm" style="opacity:.5">還可加入 ${MAX_P - ents.length} 位（至少 ${MIN_P} 人才能開始）</span></div>` : '');
-        const a3 = room.cfg ? room.cfg.allow3 !== false : true, a4 = room.cfg ? room.cfg.allow4 !== false : true, ts = room.cfg && room.cfg.turnSec != null ? +room.cfg.turnSec : 30, dis = isH ? '' : 'disabled';
+        const a3 = room.cfg ? room.cfg.allow3 !== false : true, a4 = room.cfg ? room.cfg.allow4 !== false : true, fn = !!(room.cfg && room.cfg.fun), ts = room.cfg && room.cfg.turnSec != null ? +room.cfg.turnSec : 30, dis = isH ? '' : 'disabled';
         const cfg = `<div class="mj-cfg"><label class="field-label">⚙️ 模式設定${isH ? '' : '（由房主設定）'}</label>
             <label class="mj-sw"><input type="checkbox" id="mj-allow3" ${a3 ? 'checked' : ''} ${dis}><span>允許三個字母的單字</span></label>
             <div class="mj-note-l">${a3 ? '' : '關閉時：三字母單字不算合法單字，只有最後手牌剩兩張、湊成三字母單字胡牌時才算數'}</div>
             <label class="mj-sw"><input type="checkbox" id="mj-allow4" ${a4 ? 'checked' : ''} ${dis}><span>允許四個字母的單字</span></label>
+            <label class="mj-sw"><input type="checkbox" id="mj-money" ${room.cfg && room.cfg.money ? 'checked' : ''} ${dis}><span>💰 玩錢（自摸：其他人都付；放槍：放槍者付）</span></label>
             <div class="mj-sw"><span>每回合限時（秒，0＝不限時）</span><input type="number" id="mj-turn-input" min="0" max="600" inputmode="numeric" value="${ts}" ${dis}></div></div>`;
         return `<div class="mj-lobby room-like"><h1>🀄 英文麻將等待大廳</h1>
             <div class="room-header"><span>房間代碼：</span><span class="room-code">#${esc(code)}</span></div>
@@ -1128,7 +1196,7 @@ const Mahjong = (() => {
         const pairs = [], pile = r.pile || '';
         for (let i = 0; i + 1 < pile.length; i += 2) pairs.push({ s: +pile[i], c: pile[i + 1] });
         const lastIdx = r.phase === 'claim' && pairs.length ? pairs.length - 1 : -1;
-        const zone = (s, cls) => `<div class="mj-dz ${cls}">${pairs.map((p, i) => p.s === s ? `<span class="mj-pc ${i === lastIdx ? 'last' : ''}">${p.c.toUpperCase()}</span>` : '').join('')}</div>`;
+        const zone = (s, cls) => `<div class="mj-dz ${cls}">${pairs.map((p, i) => p.s === s ? `<span class="mj-pc ${i === lastIdx ? 'last' : ''} ${funOn() && p.c === r.gold ? 'gold' : ''}">${p.c.toUpperCase()}</span>` : '').join('')}</div>`;
         const opp = s => `<div class="mj-opp ${slotOf(s)}"><div class="mj-oid">${avHtml(s, 's')}<div class="mj-nmw"><b class="mj-nm">${esc(seatName(s))}</b>${bubble(s)}</div></div><div class="mj-melds">${meldHtml(s)}</div></div>`;
         const zones = Array.from({ length: np }, (_, o) => { const s = (mySeat + o) % np; return zone(s, 'z-' + slotOf(s)); }).join('');
         const opps = Array.from({ length: np - 1 }, (_, i) => opp((mySeat + 1 + i) % np)).join('');
@@ -1141,7 +1209,7 @@ const Mahjong = (() => {
         const { segs } = split(hand), mark = new Array(hand.length).fill(0);
         segs.forEach(s => { for (let i = 0; i < s.len; i++) mark[s.s + i] = i === 0 ? 1 : 2; });
         const tileCls = id => `mj-t tl ${vowel(letterOf(id)) ? 'v' : ''}`;
-        const handTiles = hand.map((id, i) => `<button class="${tileCls(id)} ${mark[i] ? 'g' : ''} ${mark[i] === 2 ? 'gc' : ''} ${id === drawnId && playing ? 'dr' : ''} ${introing && !revealed.has(id) ? 'hide' : ''}" data-id="${id}">${tiles[id].toUpperCase()}</button>`).join('');
+        const handTiles = hand.map((id, i) => `<button class="${tileCls(id)} ${mark[i] ? 'g' : ''} ${mark[i] === 2 ? 'gc' : ''} ${id === drawnId && playing ? 'dr' : ''} ${funOn() && tiles[id] === r.gold ? 'gold' : ''} ${introing && !revealed.has(id) ? 'hide' : ''}" data-id="${id}">${tiles[id].toUpperCase()}</button>`).join('');
 
         let cmHtml = '';
         if (cm && playing) { // 中央組牌區：灰色虛線外框、半透明
@@ -1163,8 +1231,8 @@ const Mahjong = (() => {
                 <button class="btn mj-b" data-a="sort">整理</button></div>` : '';
         const overlay = !playing ? `<div class="mj-result"><div>${resultHtml()}<div class="mj-res-btns">${solo ? '<button class="btn btn-primary" data-a="again">再來一局</button>' : '<button class="btn btn-primary" data-a="back">🏠 回到房間</button>'}
             <button class="btn btn-secondary" data-a="leave">離開</button></div></div></div>` : '';
-        const cfgTag = (turnSecOf() ? `・限時${turnSecOf()}秒` : '') + (allow3() ? '' : '・無三字單字') + (allow4() ? '' : '・無四字單字');
-        const html = `<div class="mj-game ${myTurn && playing && r.phase === 'discard' && !cm ? 'can-discard' : ''}">
+        const cfgTag = (turnSecOf() ? `・限時${turnSecOf()}秒` : '') + (allow3() ? '' : '・無三字單字') + (allow4() ? '' : '・無四字單字') + (room.cfg && room.cfg.money ? '・玩錢' : '') + (funOn() ? '・🌟金牌 ' + room.gold.toUpperCase() : '');
+        const html = `<div data-felt="${esc(feltId())}" class="mj-game ${myTurn && playing && r.phase === 'discard' && !cm ? 'can-discard' : ''}">
             <div class="mj-felt"></div>
             <button class="btn btn-secondary mj-exit" data-a="leave">離開</button><div class="mj-deck">牌庫 ${(r.deck || '').length}${cfgTag}</div>
             <div class="mj-play np${np}">${ARROWS}${zones}<div class="mj-center" id="mj-center">${st}</div></div>
@@ -1199,6 +1267,7 @@ const Mahjong = (() => {
     // ---------- 按鈕 ----------
     const act = a => {
         if (a.startsWith('lv:')) { aiLevel = a.slice(3); localStorage.setItem('mj_ai_level', aiLevel); return renderMenu(); }
+        if (a === 'settings') return openSettings(); if (a === 'shop') return window.Economy && Economy.open('shop');
         if (a === 'create') return create(); if (a === 'join') return join(); if (a === 'exit') return close();
         if (a === 'solo') return startSolo(); if (a === 'multi') return renderEntry(); if (a === 'rules') return renderRules();
         if (a === 'enter') goFull();
@@ -1234,20 +1303,34 @@ const Mahjong = (() => {
         if (av && room && room.status === 'playing' && !introing && !drag) return sendEgg(+av.dataset.s); // 局內點對手頭像：丟雞蛋
         const b = e.target.closest('[data-a]'); if (!b || b.disabled) return; playClickSound(); act(b.dataset.a);
     });
+    try { db.ref('mjWords').on('child_added', sn => learnWord(String(sn.key || '').toLowerCase())); } catch (e) { }
+    $('mj-settings').addEventListener('click', e => {
+        const p = $('mj-settings');
+        if (e.target === p || e.target.closest('[data-x]')) return p.classList.add('hidden');
+        if (e.target.closest('[data-shop]')) { p.classList.add('hidden'); return window.Economy && Economy.open('shop'); }
+        const th = e.target.closest('[data-th]');
+        if (th) { playClickSound(); if (Economy.equip('throw', th.dataset.th)) openSettings(); else toast('還沒購買，到商店買買看吧'); }
+    });
+    $('mj-settings').addEventListener('change', e => {
+        if (e.target.id !== 'mj-s3' && e.target.id !== 'mj-s4') return;
+        soloCfg[e.target.id === 'mj-s3' ? 'allow3' : 'allow4'] = !!e.target.checked;
+        try { localStorage.setItem('mjSoloCfg', JSON.stringify(soloCfg)); } catch (err) { }
+    });
     $('mj-search').addEventListener('click', e => { if (e.target === $('mj-search')) $('mj-search').classList.add('hidden'); });
     $('mj-chatpop').addEventListener('click', e => {
         const b = e.target.closest('[data-chat]');
         if (b) { playClickSound(); if (room && room.status === 'playing') sendChat(+b.dataset.chat); } else if (!e.target.closest('.mj-cp-in')) $('mj-chatpop').classList.add('hidden');
     });
+    body.addEventListener('input', e => { // 有輸入房間代碼 → 隱藏「建立房間」，避免點錯
+        if (e.target.id !== 'mj-code') return;
+        const b = body.querySelector('[data-a="create"]'); if (b) b.style.display = e.target.value.trim() ? 'none' : '';
+    });
     body.addEventListener('change', e => {
-        if (e.target.id === 'mj-s3' || e.target.id === 'mj-s4') { // 單人練習設定
-            soloCfg[e.target.id === 'mj-s3' ? 'allow3' : 'allow4'] = !!e.target.checked;
-            try { localStorage.setItem('mjSoloCfg', JSON.stringify(soloCfg)); } catch (err) { }
-            return;
-        }
         if (!room || room.host !== key || room.status === 'playing') return; // 房主的模式設定
         if (e.target.id === 'mj-allow3') ref.child('cfg/allow3').set(!!e.target.checked);
         if (e.target.id === 'mj-allow4') ref.child('cfg/allow4').set(!!e.target.checked);
+        if (e.target.id === 'mj-money') ref.child('cfg/money').set(!!e.target.checked);
+        if (e.target.id === 'mj-fun') ref.child('cfg/fun').set(!!e.target.checked);
     });
     body.addEventListener('focusout', e => {
         if (e.target.id !== 'mj-turn-input') return;
