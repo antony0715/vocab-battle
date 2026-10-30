@@ -301,7 +301,7 @@
                 catRows += `<div class="eco-st">
                     <div class="l">
                         <b>${st.id}</b><small>${esc(st.name)}</small>
-                        <div>持有 ${h.q} 單位・均價 ${(h.cost / h.q).toFixed(1)}</div>
+                        <div>持有 ${h.q} 股・均價 ${(h.cost / h.q).toFixed(1)}</div>
                     </div>
                     <div style="text-align:right;">
                         <b>🪙 ${val}</b>
