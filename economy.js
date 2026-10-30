@@ -42,8 +42,8 @@
         { id: 'TECH', name: 'AI單字科技基金', cat: 'fund', base: 180, vol: .15, p1: 180, p2: 65, desc: '結合人工智慧演算法與記憶曲線，長期成長趨勢明確。' },
 
         // --- 虛擬貨幣 (Crypto) ---
-        { id: 'BTC', name: '比特幣 (BitWord)', cat: 'crypto', base: 500, vol: 1.3, p1: 35, p2: 13, desc: '加密貨幣之王，市場熱度極高，隨時可能暴漲或大瀑布。' },
-        { id: 'ETH', name: '以太幣 (EthVocab)', cat: 'crypto', base: 300, vol: 1.6, p1: 28, p2: 11, desc: '智慧合約龍頭幣，暴跌時是抄底機會，暴漲時能讓你一夕致富。' },
+        { id: 'BTC', name: '碧特幣 (BitWord)', cat: 'crypto', base: 500, vol: 1.3, p1: 35, p2: 13, desc: '加密貨幣之王，市場熱度極高，隨時可能暴漲或大瀑布。' },
+        { id: 'ETH', name: '乙太幣 (EthVocab)', cat: 'crypto', base: 300, vol: 1.6, p1: 28, p2: 11, desc: '智慧合約龍頭幣，暴跌時是抄底機會，暴漲時能讓你一夕致富。' },
         { id: 'DOGE', name: '狗狗單字幣', cat: 'crypto', base: 10, vol: 2.2, p1: 15, p2: 7, desc: '迷因幣之王！沒有基本面，全憑市場情緒與社群炒作，波動極度瘋狂。' }
     ];
 
