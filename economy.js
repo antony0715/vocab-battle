@@ -2,7 +2,7 @@
 (() => {
     'use strict';
     const KEY = 'vbEco_v3';
-    
+
     // 麻將投擲物
     const THROWS = [
         { id: 'egg', e: '🥚', name: '雞蛋', price: 0, c: '#fde047' },
@@ -26,7 +26,7 @@
         { id: 'chat_cute', name: '可愛快捷語包', price: 150, list: ['謝謝你～', '好險好險', '哇！好厲害', '我只是路過的', '給我一個字母嘛', '加油加油！'] }
     ];
 
-    // 📈 三大市場標的：股票、基金、虛擬貨幣
+    // 📈 三大市場標的：股票, 基金, 虛擬貨幣
     const STOCKS = [
         { id: 'KNG', name: '單字King科技', cat: 'stock', base: 150, vol: .35, div: 0.04, desc: '開發英文單字學習遊戲的科技公司，營運穩健並具備定期配息能力。' },
         { id: 'RSA', name: '紅海科技', cat: 'stock', base: 100, vol: .48, div: 0.02, desc: '專門經營錯題庫存放業務，市場波動較大，周邊利潤高。' },
@@ -44,9 +44,13 @@
 
     const FEE = .01;
     const def = () => ({ coins: 100, items: {}, equip: { throw: 'egg', felt: 'default' }, stocks: {}, lastDaily: '', lastTax: '', lastDividend: 0 });
-    
-    // 🔍 智慧自動掃描與搶救所有舊存檔
+
     let S = def();
+
+    // 💡 必須先定義好 save 函數，後續清洗與寫入才不會報錯！
+    const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { } };
+
+    // 🔍 智慧自動掃描與搶救所有舊存檔
     try {
         const possibleKeys = [KEY, 'vbEco_v2', 'vbEco_v1', 'vbEco'];
         let bestData = null;
@@ -57,21 +61,53 @@
             if (raw) {
                 try {
                     const parsed = JSON.parse(raw);
-                    if (parsed && typeof parsed.coins === 'number' && parsed.coins >= maxCoins) {
+                    if (parsed && typeof parsed.coins === 'number' && !isNaN(parsed.coins) && parsed.coins >= maxCoins) {
                         maxCoins = parsed.coins;
                         bestData = parsed;
                     }
-                } catch (e) {}
+                } catch (e) { }
             }
         });
 
         if (bestData) {
             S = Object.assign(def(), bestData, { equip: Object.assign(def().equip, bestData.equip || {}) });
-            localStorage.setItem(KEY, JSON.stringify(S)); // 強制同步回最新 Key
         }
-    } catch (e) {}
+    } catch (e) { }
 
-    const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { } };
+    // 🛡️【智慧救援防呆】如果金幣變成 NaN 或異常，嘗試從持股市值救援
+    if (typeof S.coins !== 'number' || isNaN(S.coins)) {
+        let rescueCoins = 100;
+        if (S.stocks && typeof S.stocks === 'object') {
+            let stockVal = 0;
+            Object.keys(S.stocks).forEach(id => {
+                const h = S.stocks[id];
+                if (h && typeof h.cost === 'number' && !isNaN(h.cost)) {
+                    stockVal += h.cost;
+                }
+            });
+            if (stockVal > 0) {
+                rescueCoins = Math.max(100, Math.floor(stockVal * 0.5));
+            }
+        }
+        S.coins = rescueCoins;
+    }
+
+    if (!S.stocks || typeof S.stocks !== 'object') {
+        S.stocks = {};
+    } else {
+        Object.keys(S.stocks).forEach(id => {
+            const h = S.stocks[id];
+            if (h) {
+                if (typeof h.lev !== 'number' || isNaN(h.lev)) h.lev = 1;
+                if (typeof h.q !== 'number' || isNaN(h.q)) h.q = 0;
+                if (typeof h.cost !== 'number' || isNaN(h.cost)) h.cost = 0;
+            }
+        });
+    }
+
+    // 清洗完畢後安全寫回存檔
+    save();
+
     const subs = [];
     const changed = () => { save(); document.querySelectorAll('.eco-coins').forEach(el => { el.textContent = S.coins; }); subs.forEach(f => { try { f(); } catch (e) { } }); if (ov) refresh(); };
     const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -83,7 +119,7 @@
         impact: 0,
         time: "剛剛"
     };
-    
+
     let showNewsModal = false;
 
     function toast(msg) {
@@ -92,6 +128,7 @@
         t.textContent = msg; t.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('on'), 2200);
     }
 
+    let taxMult = (() => { const v = localStorage.getItem('vk_taxmult'); return v !== null && !isNaN(+v) ? +v : 1; })();
     function getNextTaxAmount() {
         let invVal = 0;
         Object.keys(S.stocks).forEach(id => {
@@ -107,11 +144,11 @@
         else if (netWorth >= 500000) taxRate = 0.12;
         else if (netWorth >= 100000) taxRate = 0.05;
 
-        return { netWorth, taxRate, taxDue: Math.round(netWorth * taxRate * 0.05) };
+        return { netWorth, taxRate, taxDue: Math.round(netWorth * taxRate * 0.05 * taxMult) };
     }
 
     const add = (n, why) => { n = Math.round(n); if (!n) return; S.coins = Math.max(0, S.coins + n); changed(); if (why) toast(`🪙 ${n > 0 ? '+' : ''}${n} ${why}`); };
-    
+
     function checkTaxAndDividend() {
         const now = Date.now();
         if (!S.lastDividend || now - S.lastDividend > 180000) {
@@ -178,7 +215,7 @@
 
     // ---------- 高效能零迴圈隨機遊走引擎 ----------
     const hash = n => { n = n | 0; n = (n ^ 61) ^ (n >>> 16); n = (n + (n << 3)) | 0; n = n ^ (n >>> 4); n = Math.imul(n, 0x27d4eb2d); n = n ^ (n >>> 15); return (n >>> 0) / 4294967296; };
-    
+
     function updateMarketNews() {
         const nowMin = Math.floor(Date.now() / 60000);
         if (nowMin % 3 === 0) {
@@ -223,18 +260,18 @@
         const i = STOCKS.indexOf(st) + 1;
         const t1 = Math.floor(m / 30);
         const t2 = Math.floor(m / 360);
-        
+
         const r1 = hash(t1 * 131 + i * 977) - 0.48;
         const r2 = hash(t2 * 73 + i * 311) - 0.5;
         const noise = (hash(m * 7 + i * 37) - 0.5) * 0.2;
-        
+
         const trend = r2 * 1.5 + r1 * 0.8 + noise + (activeNews.impact * 0.12);
         return Math.max(0.05, st.base * Math.exp(trend * st.vol));
     }
 
-    function price(st, tms = Date.now()) { 
+    function price(st, tms = Date.now()) {
         updateMarketNews();
-        const m = tms / 60000, a = Math.floor(m), f = m - a; 
+        const m = tms / 60000, a = Math.floor(m), f = m - a;
         const curP = pAt(st, a) * (1 - f) + pAt(st, a + 1) * f;
         checkLiquidationAndStopLoss(st, curP);
         return curP;
@@ -268,10 +305,10 @@
             }, 200);
         }
     }
-    
+
     const RANGES = { '1h': [60, '1 小時'], '6h': [360, '6 小時'], '1d': [1440, '1 天'], '7d': [10080, '7 天'] };
     const CAND = { '1h': 30, '6h': 36, '1d': 48, '7d': 42 };
-    
+
     function candles(st) {
         const mins = RANGES[range][0], N = CAND[range], span = mins * 60000 / N, nowT = Date.now(), endT = Math.ceil(nowT / span) * span, out = [];
         for (let i = 0; i < N; i++) {
@@ -282,7 +319,7 @@
         return out;
     }
     const fmtT = t => { const d = new Date(t), z = n => String(n).padStart(2, '0'); return range === '7d' ? `${d.getMonth() + 1}/${d.getDate()} ${z(d.getHours())}時` : `${z(d.getHours())}:${z(d.getMinutes())}`; };
-    
+
     function bigChart(st) {
         const cs = candles(st), W = 360, H = 200, L = 42, R = 8, T = 10, B = 172, N = CAND[range];
         let hi = Math.max(...cs.map(c => c.h)), lo = Math.min(...cs.map(c => c.l)); const pad = (hi - lo) * .06 || 1; hi += pad; lo -= pad;
@@ -304,29 +341,29 @@
 
     function trade(id, side, qty, leverage = 1, stopLoss = 0) {
         const st = STOCKS.find(s => s.id === id); if (!st) return;
-        const baseP = price(st); 
-        
+        const baseP = price(st);
+
         if (side === 'buy') {
-            const slippageP = baseP * (1 + (qty * 0.0005)); 
+            const slippageP = baseP * (1 + (qty * 0.0005));
             const totalValue = slippageP * qty;
             const marginCost = Math.ceil((totalValue / leverage) * (1 + FEE));
-            
+
             if (S.coins < marginCost) return toast('金幣不足以支付保證金！');
-            
-            S.coins -= marginCost; 
+
+            S.coins -= marginCost;
             const curH = S.stocks[id] || { q: 0, cost: 0, lev: leverage, sl: 0 };
-            curH.q += qty; 
-            curH.cost += marginCost; 
+            curH.q += qty;
+            curH.cost += marginCost;
             curH.lev = leverage;
             curH.sl = stopLoss;
-            S.stocks[id] = curH; 
-            changed(); 
+            S.stocks[id] = curH;
+            changed();
             toast(`📈 [${leverage}x槓桿] 買進 ${st.name} ${qty} 單位，支付保證金 ${marginCost} 🪙`);
         } else {
             const curH = S.stocks[id];
             if (!curH || curH.q <= 0) return toast('你沒有持有此資產');
             qty = Math.min(qty, curH.q);
-            
+
             const sellSlippage = Math.max(0.7, 1 - (qty * 0.001));
             const actualSellPrice = baseP * sellSlippage;
 
@@ -335,14 +372,14 @@
             const profitLoss = (actualSellPrice - avgBuyPrice) * qty * curH.lev;
             const finalReturn = Math.max(0, Math.round(costPortion + profitLoss));
 
-            S.coins += finalReturn; 
-            curH.q -= qty; 
-            curH.cost -= costPortion; 
-            
-            if (curH.q <= 0) delete S.stocks[id]; 
+            S.coins += finalReturn;
+            curH.q -= qty;
+            curH.cost -= costPortion;
+
+            if (curH.q <= 0) delete S.stocks[id];
             else S.stocks[id] = curH;
-            
-            changed(); 
+
+            changed();
             toast(`💵 賣出 ${st.name} ${qty} 單位，拿回 ${finalReturn} 🪙`);
         }
     }
@@ -394,7 +431,7 @@
 .eco-price{font-size:18px;font-weight:900}.eco-price small{font-weight:400;color:var(--muted,#666);font-size:11px}
 .eco-tabs2{display:flex;gap:6px}.eco-tabs2 button{flex:1;border:none;border-radius:8px;padding:5px 0;font-weight:700;cursor:pointer;background:var(--surface,#eee);color:var(--text,#111)}.eco-tabs2 button.on{background:#f59e0b;color:#fff}
 .eco-box2{border:1px solid var(--border,#ddd);border-radius:12px;padding:8px 10px;display:flex;flex-direction:column;gap:6px;font-size:13px}
-.eco-qrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.eco-qty{width:80px;text-align:center;padding:5px;border-radius:8px;border:1px solid var(--border,#ccc);font-size:15px}
+.eco-qrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.eco-qty,.eco-tf{width:80px;text-align:center;padding:5px;border-radius:8px;border:1px solid var(--border,#ccc);font-size:15px}
 .eco-news-ticker{background:#1e293b;color:#f8fafc;padding:8px 12px;border-radius:10px;font-size:12px;display:flex;align-items:center;gap:8px;box-shadow:inset 0 1px 3px rgba(0,0,0,0.3);cursor:pointer;transition:background .2s;}
 .eco-news-ticker:hover{background:#334155;}
 .eco-modal{position:absolute;inset:0;background:rgba(0,0,0,0.6);z-index:2300;display:flex;align-items:center;justify-content:center;padding:20px;}
@@ -427,9 +464,9 @@
 
     function marketHtml() {
         if (sel) return detailHtml(STOCKS.find(x => x.id === sel));
-        
+
         const ticker = `<div class="eco-news-ticker" data-open-news="1"><span>📰 <b>即時商業快訊 (點擊看詳情)：</b></span><span style="color:#fde047; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${activeNews.title}</span></div>`;
-        
+
         const subTabs = `<div class="eco-subtabs">
             <button class="${marketSubTab === 'stock' ? 'on' : ''}" data-msub="stock">📊 股票</button>
             <button class="${marketSubTab === 'fund' ? 'on' : ''}" data-msub="fund">🏛️ 基金/配息</button>
@@ -437,13 +474,13 @@
         </div>`;
 
         const list = STOCKS.filter(s => s.cat === marketSubTab);
-        
+
         const rows = list.map(st => {
             const p = price(st), p0 = price(st, Date.now() - 3600000), h = S.stocks[st.id];
             const hold = h ? `持有 ${h.q} 單位 (${h.lev}x)・市值 ${Math.floor(p * h.q)} 🪙` : '尚未持有';
             return `<div class="eco-st click" data-sel="${st.id}"><div class="l"><b>${st.id}</b><small>${esc(st.name)}</small><div><b>🪙 ${p.toFixed(1)}</b> ${pct(p, p0)} <small>近 1 小時</small></div></div>${spark(st)}<div class="hold">${hold} <span class="eco-go" data-sel="${st.id}">詳細資料 ›</span></div></div>`;
         }).join('');
-        
+
         let modalHtml = '';
         if (showNewsModal) {
             modalHtml = `<div class="eco-modal" data-close-news="1">
@@ -466,7 +503,7 @@
     function accountHtml() {
         let totalInvestment = 0;
         let totalCost = 0;
-        
+
         const categories = [
             { key: 'stock', name: '📈 股票持股明細' },
             { key: 'fund', name: '🏛️ 基金持股明細' },
@@ -487,7 +524,7 @@
                 totalInvestment += val;
                 totalCost += h.cost;
                 const pl = val - h.cost;
-                
+
                 catRows += `<div class="eco-st click" data-gotosel="${st.id}">
                     <div class="l" data-gotosel="${st.id}">
                         <b data-gotosel="${st.id}">${st.id}</b><small data-gotosel="${st.id}">${esc(st.name)}</small>
@@ -523,7 +560,7 @@
                 <div class="eco-wallet-subbox"><span>投資總市值</span><b>🪙 ${totalInvestment} (${totalPL >= 0 ? '+' : ''}${totalPL})</b></div>
             </div>
             <div style="margin-top:6px; font-size:12px; color:#dc2626; font-weight:700;">
-                🏛️ 下期預估稅額：🪙 ${taxInfo.taxDue.toLocaleString()} (最高累進稅率 ${taxInfo.taxRate * 100}%)
+                🏛️ 下期預估稅額：🪙 ${taxInfo.taxDue.toLocaleString()} (最高累進稅率 ${taxInfo.taxRate * 100}%，總統稅率倍率 ×${taxMult})
             </div>
         </div>
 
@@ -531,8 +568,8 @@
             <div style="font-weight:800;">💸 好友轉帳系統</div>
             <div class="eco-note">轉帳給其他線上好友：</div>
             <div style="display:flex; gap:6px; margin-top:2px; flex-wrap:wrap;">
-                <input type="text" id="eco-transfer-to" placeholder="好友名稱/ID" class="eco-qty" style="flex:1; text-align:left; padding:6px 10px; width:auto;">
-                <input type="number" id="eco-transfer-amt" placeholder="金額" class="eco-qty" style="width:90px; padding:6px 10px;" min="1">
+                <input type="text" id="eco-transfer-to" placeholder="好友名稱（對方要設過暱稱）" class="eco-tf" enterkeyhint="next" autocomplete="off" style="flex:1; text-align:left; padding:6px 10px; width:auto;">
+                <input type="number" id="eco-transfer-amt" placeholder="金額" class="eco-tf" inputmode="numeric" enterkeyhint="done" style="width:90px; padding:6px 10px;" min="1">
                 <button class="eco-b" data-action="transfer" style="padding:6px 14px;">確認轉帳</button>
             </div>
         </div>
@@ -543,12 +580,12 @@
     function detailHtml(st) {
         const p = price(st), h = S.stocks[st.id], mins = RANGES[range][0];
         const q = Math.max(1, qty | 0);
-        
+
         const totalValue = p * q;
         const marginCost = Math.ceil((totalValue / currentLev) * (1 + FEE));
         const maxBuy = Math.max(1, Math.floor((S.coins * currentLev) / (p * (1 + FEE))));
         const get = Math.floor(p * q * (1 - FEE));
-        
+
         let hold = '<div class="eco-box2"><b>我的持股</b><div class="eco-note">尚未持有</div></div>';
         if (h) {
             const val = p * h.q, mx = Math.max(val, h.cost) || 1, win = val >= h.cost;
@@ -558,7 +595,7 @@
                 <div class="${win ? 'eco-up' : 'eco-dn'}" style="text-align:right">${win ? '+' : ''}${Math.round(val - h.cost)} 🪙（${((val / h.cost - 1) * 100).toFixed(1)}%）</div>
                 ${h.sl ? `<div style="font-size:11px; color:#dc2626; margin-top:2px;">⚠️ 停損價：<b>${h.sl}</b></div>` : ''}</div>`;
         }
-        
+
         return `<button class="eco-b alt" data-back="1" style="align-self:flex-start">‹ 返回股市列表</button>
             <div><b style="font-size:18px">${st.id}</b> <span>${esc(st.name)}</span><div class="eco-note">${esc(st.desc)}</div></div>
             <div class="eco-price">🪙 ${p.toFixed(2)} ${pct(p, price(st, Date.now() - 3600000))}<small> 近 1 小時</small></div>
@@ -613,12 +650,35 @@
         const body = ov.querySelector('.eco-body'), top = body.scrollTop;
         ov.querySelector('.bal span').textContent = S.coins;
         ov.querySelectorAll('.eco-tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
-        
+
         if (tab === 'shop') body.innerHTML = shopHtml();
         else if (tab === 'market') body.innerHTML = marketHtml();
         else if (tab === 'account') body.innerHTML = accountHtml();
-        
+
         body.scrollTop = top;
+    }
+
+    let transferring = false;
+    async function doTransfer() {
+        if (!ov || transferring) return;
+        const toInput = ov.querySelector('#eco-transfer-to'), amtInput = ov.querySelector('#eco-transfer-amt');
+        const friendName = toInput ? toInput.value.trim() : '', amt = parseInt(amtInput ? amtInput.value : 0, 10) || 0;
+        if (!friendName) return toast('請輸入好友名稱！');
+        if (amt <= 0) return toast('請輸入有效金額！');
+        if (S.coins < amt) return toast('金幣不足！');
+        if (typeof World === 'undefined' || !World.findPlayer) return toast('轉帳需要世界地圖模組（world.js）');
+        transferring = true; toast('轉帳中…');
+        try {
+            const who = await World.findPlayer(friendName);
+            if (!who.ok) return toast(who.msg);
+            S.coins -= amt; save(); changed();
+            try { await World.sendCoins(who.uid, amt); }
+            catch (err) { S.coins += amt; save(); changed(); throw err; }
+            if (toInput) toInput.value = ''; if (amtInput) amtInput.value = '';
+            toast(`✅ 已轉帳 ${amt.toLocaleString()} 🪙 給「${who.name}」，對方下次開遊戲就會收到`);
+            refresh();
+        } catch (err) { toast('轉帳失敗：' + (err && err.message ? err.message : err)); }
+        finally { transferring = false; }
     }
 
     function open(t) {
@@ -637,10 +697,10 @@
             <div class="eco-body"></div>
         </div>`;
         document.body.appendChild(ov);
-        
+
         ov.addEventListener('click', e => {
             if (e.target === ov || e.target.closest('[data-x]')) return close();
-            
+
             if (e.target.closest('[data-open-news]')) {
                 showNewsModal = true;
                 return refresh();
@@ -650,28 +710,11 @@
                 return refresh();
             }
 
-            const tb = e.target.closest('[data-tab]'); 
+            const tb = e.target.closest('[data-tab]');
             if (tb) { tab = tb.dataset.tab; sel = null; showNewsModal = false; return refresh(); }
             const ms = e.target.closest('[data-msub]'); if (ms) { marketSubTab = ms.dataset.msub; sel = null; return refresh(); }
-            
-            const tfBtn = e.target.closest('[data-action="transfer"]');
-            if (tfBtn) {
-                const toInput = ov.querySelector('#eco-transfer-to');
-                const amtInput = ov.querySelector('#eco-transfer-amt');
-                const friendName = toInput ? toInput.value.trim() : '';
-                const amt = parseInt(amtInput ? amtInput.value : 0) || 0;
 
-                if (!friendName) return toast('請輸入好友名稱！');
-                if (amt <= 0) return toast('請輸入有效金額！');
-                if (S.coins < amt) return toast('金幣不足！');
-
-                S.coins -= amt;
-                save();
-                toInput.value = ''; amtInput.value = '';
-                changed();
-                toast(`✅ 成功轉帳 ${amt} 🪙 給好友「${friendName}」！`);
-                return refresh();
-            }
+            if (e.target.closest('[data-action="transfer"]')) return doTransfer();
 
             if (e.target.closest('[data-sl-clear]')) {
                 stopLossVal = '';
@@ -681,16 +724,16 @@
                 toast('已清除停損設定');
                 return refresh();
             }
-            
-            const sl = e.target.closest('[data-sel]'); 
-            if (sl) { 
-                sel = sl.dataset.sel; 
-                detailFrom = 'market'; 
-                qty = 1; selT = 0; 
+
+            const sl = e.target.closest('[data-sel]');
+            if (sl) {
+                sel = sl.dataset.sel;
+                detailFrom = 'market';
+                qty = 1; selT = 0;
                 currentLev = S.stocks[sel]?.lev || 1;
                 stopLossVal = S.stocks[sel]?.sl || '';
-                ov.querySelector('.eco-body').scrollTop = 0; 
-                return refresh(); 
+                ov.querySelector('.eco-body').scrollTop = 0;
+                return refresh();
             }
 
             const gts = e.target.closest('[data-gotosel]');
@@ -712,49 +755,55 @@
             const cd = e.target.closest('[data-c]'); if (cd) { selT = +cd.dataset.c; return refresh(); }
             const dq = e.target.closest('[data-q]'); if (dq) { qty = Math.max(1, (qty | 0) + +dq.dataset.q); return refresh(); }
             const sq = e.target.closest('[data-qset]'); if (sq) { qty = Math.max(1, +sq.dataset.qset); return refresh(); }
-            
-            const dd = e.target.closest('[data-do]'); 
-            if (dd && sel) { 
+
+            const dd = e.target.closest('[data-do]');
+            if (dd && sel) {
                 const slInput = ov.querySelector('.eco-sl-input');
                 const slNum = slInput && slInput.value !== '' ? parseFloat(slInput.value) || 0 : 0;
-                return trade(sel, dd.dataset.do, Math.max(1, qty | 0), currentLev, slNum); 
+                return trade(sel, dd.dataset.do, Math.max(1, qty | 0), currentLev, slNum);
             }
-            
+
             const by = e.target.closest('[data-buy]'); if (by) return buy(by.dataset.buy);
             const eq = e.target.closest('[data-eq]'); if (eq) { const [c, r] = eq.dataset.eq.split(':'); return void equip(c, r); }
         });
-        
-        ov.addEventListener('input', e => { 
+
+        ov.addEventListener('input', e => {
             if (e.target.classList.contains('eco-lev-slider')) {
                 currentLev = parseInt(e.target.value) || 1;
                 const levText = ov.querySelector('.eco-lev-val');
                 if (levText) levText.textContent = currentLev + 'x';
-                
+
                 const p = price(STOCKS.find(x => x.id === sel));
                 const totalValue = p * Math.max(1, qty | 0);
                 const marginCost = Math.ceil((totalValue / currentLev) * (1 + FEE));
                 const maxBuyVal = Math.max(1, Math.floor((S.coins * currentLev) / (p * (1 + FEE))));
-                
+
                 const marginEl = ov.querySelector('.eco-box2 div:nth-last-child(2) div:nth-child(1) b');
                 if (marginEl) marginEl.textContent = marginCost + ' 🪙';
-                
+
                 const maxBuyBtn = ov.querySelector('[data-qset]');
                 if (maxBuyBtn && maxBuyBtn.dataset.qset !== undefined) {
                     maxBuyBtn.dataset.qset = maxBuyVal;
                     maxBuyBtn.textContent = `最多可買 ${maxBuyVal} 單位`;
                 }
             } else if (e.target.classList.contains('eco-qty') && !e.target.classList.contains('eco-sl-input')) {
-                qty = Math.max(1, Math.floor(+e.target.value) || 1); 
+                qty = Math.max(1, Math.floor(+e.target.value) || 1);
             } else if (e.target.classList.contains('eco-sl-input')) {
                 stopLossVal = e.target.value;
                 const slNum = stopLossVal !== '' ? parseFloat(stopLossVal) || 0 : 0;
                 if (sel && S.stocks[sel]) { S.stocks[sel].sl = slNum; save(); }
             }
         });
-        
+
+        ov.addEventListener('keydown', e => {
+            if (e.key !== 'Enter') return; const id = e.target.id;
+            if (id === 'eco-transfer-to') { e.preventDefault(); const a = ov.querySelector('#eco-transfer-amt'); if (a) a.focus(); }
+            else if (id === 'eco-transfer-amt') { e.preventDefault(); e.target.blur(); doTransfer(); }
+            else if (e.target.classList && e.target.classList.contains('eco-qty')) { e.preventDefault(); e.target.blur(); }
+        });
         ov.addEventListener('focusout', e => { if (e.target.classList && e.target.classList.contains('eco-qty') && !e.target.classList.contains('eco-sl-input')) refresh(); });
-        
-        refresh(); 
+
+        refresh();
         timer = setInterval(() => { if (tab === 'market' || sel) refresh(); }, 4000);
     }
 
@@ -777,17 +826,18 @@
         daily();
     }
 
-    window.Economy = { 
-        stocksValue: () => Object.keys(S.stocks).reduce((a, id) => { const st = STOCKS.find(x => x.id === id); return a + (st ? price(st) * S.stocks[id].q : 0); }, 0), 
-        stocks: () => STOCKS, 
-        stockPrice: st => price(st), 
-        run: () => run, 
-        runReset: () => { run = 0; }, 
-        THROWS, FELTS, CHAT_PACKS, 
-        coins: () => S.coins, 
-        owned, equipped, equip, throwIdx, onAnswer, onMj, onWord, open, close, 
-        onChange: f => subs.push(f), 
-        init 
+    window.Economy = {
+        stocksValue: () => Object.keys(S.stocks).reduce((a, id) => { const st = STOCKS.find(x => x.id === id); return a + (st ? price(st) * S.stocks[id].q : 0); }, 0),
+        setTaxMult: m => { taxMult = m; try { localStorage.setItem('vk_taxmult', m); } catch (e) { } }, taxMult: () => taxMult,
+        stocks: () => STOCKS,
+        stockPrice: st => price(st),
+        run: () => run,
+        runReset: () => { run = 0; },
+        THROWS, FELTS, CHAT_PACKS,
+        coins: () => S.coins, add,
+        owned, equipped, equip, throwIdx, onAnswer, onMj, onWord, open, close,
+        onChange: f => subs.push(f),
+        init
     };
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();

@@ -3,7 +3,8 @@
 // 依賴：firebase、Economy、Trade、Civic、esc、Profile
 const World = (() => {
     // ---------- 可調整的數值 ----------
-    const BASE = [350, 160, 70, 30, 40], CAP = [5, 4, 2, 1, 1], AREA = [4, 8, 14, 24, 40], MAXA = [6, 12, 20, 36, 60];
+    const BASE = [7000, 3200, 1400, 600, 800],   // 通膨：地價 ×20
+         CAP = [5, 4, 2, 1, 1], AREA = [4, 8, 14, 24, 40], MAXA = [6, 12, 20, 36, 60];
     const ZN = ['市中心', '市區', '郊區', '鄉村', '山野'];
     const U = ['住宅', '商業', '工業', '農田', '公園', '林地'];
     const UT = ['#f6c85f', '#f28e2b', '#7f8fa6', '#d9e24a', '#3ddc97', '#1f6f43'];   // 用途色（半透明疊在地形上）
@@ -121,7 +122,7 @@ const World = (() => {
         }
         parcels.forEach((p, i) => p.nb = [...nbs[i]]);
         // 股票公司總部：每家公司固定一塊市中心地（不會自動買地，也不能買賣）
-        const st = typeof Economy !== 'undefined' && Economy.stocks ? Economy.stocks() : [], used = new Set();
+        const st = typeof Economy !== 'undefined' && Economy.stocks ? Economy.stocks().filter(s => !s.cat || s.cat === 'stock') : [], used = new Set();
         st.forEach((s, n) => { const t = towns[n % towns.length]; if (!t) return; const c = parcels.filter(p => p.z === 0 && !used.has(p.i)).sort((a, b) => Math.hypot(a.x - t.x, a.y - t.y) - Math.hypot(b.x - t.x, b.y - t.y))[0]; if (c) { c.hq = n; c.u = 1; used.add(c.i); } });
     }
     let built = false; const ensure = () => { if (!built) { built = true; gen(); } };   // 第一次開地圖才生成（避免拖慢主頁載入）
@@ -129,16 +130,103 @@ const World = (() => {
     // ---------- 狀態 / 價格 / 資產 ----------
     const uid = (() => { let u = localStorage.getItem('vk_uid'); if (!u) { u = 'u' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36); localStorage.setItem('vk_uid', u); } return u; })();
     const myName = () => (typeof Profile !== 'undefined' && Profile.getName()) || '玩家';
-    const ref = i => firebase.database().ref('world/parcels/' + (i === undefined ? '' : i));
+    const ref = i => wrapRef(firebase.database().ref('world/parcels/' + (i === undefined ? '' : i)));
     let S = {}, sel = null, ov, cv, ctx, W = 0, H = 0, V = { x: 0, y: 0, k: 6 }, loaded = false, landShown = false, clk = 0;
     const price = p => { let f = 1; p.nb.forEach(j => { const s = S[j]; if (s) f += .05 + .025 * (s.b || 0); if (parcels[j].hq !== undefined) f += .12; }); return Math.max(5, Math.round(BASE[p.z] * UF[p.u] * clamp(Math.sqrt(p.a / AREA[p.z]), .6, 1.6) * Math.min(f, 2.5) * (p.wf ? 1.12 : 1))); };
-    const buildCost = (p, lv) => Math.round(BASE[p.z] * BUILD * lv);
+    const buildCost = (p, lv) => Math.round(BASE[p.z] * BUILD * lv * (Civic.pol('build') ? .7 : 1));   // 建設獎勵政策 −30%
     const builtValue = p => { let s = 0; for (let k = 1; k <= ((S[p.i] || {}).b || 0); k++) s += buildCost(p, k); return s; };
     const assets = () => { let s = 0; Object.keys(S).forEach(i => { const o = S[i], p = parcels[i]; if (p && o.o === uid) s += price(p) + builtValue(p) + (o.d ? Trade.value(o.d) : 0); }); return Math.round(s + Trade.invValue()); };
     const stocksV = () => Math.round(Economy.stocksValue ? Economy.stocksValue() : 0);
     const wealth = () => Math.round(Economy.coins() + stocksV() + (Number(localStorage.getItem('vk_assets')) || 0));
     function report() { const name = myName(); if (!name || name === '請輸入暱稱') return; try { firebase.database().ref('leaderboard_rich/' + uid).set({ name, score: wealth(), timestamp: firebase.database.ServerValue.TIMESTAMP }); } catch (e) { } }
     const hueOf = s => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
+
+    // ---------- 建築（2.5D 像素風：牆面依用途、屋頂依地主、窗戶與門） ----------
+    function rr(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
+    function geo(p, lv) { const w = p.bb[2] - p.bb[0] + 1, h = p.bb[3] - p.bb[1] + 1, m = Math.min(.8, Math.min(w, h) * .2); return { sx: (p.bb[0] + m) * V.k + V.x, sy: (p.bb[1] + m) * V.k + V.y, sw: (w - 2 * m) * V.k, sh: (h - 2 * m) * V.k, hh: lv * .7 * V.k }; }
+    const STY = {   // [名稱, 形狀, 預設牆色, 預設屋頂色]
+        cottage: ['小木屋', 'gable', '#f1dcb0', '#c0583b'], nordic: ['北歐宅', 'gable', '#f4f4f2', '#4a5568'], brick: ['紅磚屋', 'gable', '#b5654a', '#3f3f46'], villa: ['地中海別墅', 'dome', '#fff7e6', '#2f80c9'],
+        japan: ['日式和風', 'pagoda', '#e6cfa0', '#2b2b2b'], modern: ['現代宅', 'flat', '#dfe3e8', '#6b7280'], mansion: ['歐式豪宅', 'castle', '#e8dcc8', '#7a2e2e'],
+        glass: ['玻璃大樓', 'glass', '#8fb6dc', '#4b6fa0'], arcade: ['復古騎樓', 'flat', '#e9c77b', '#a33a3a'], mall: ['百貨商場', 'flat', '#f2a65a', '#d35400'], neon: ['霓虹商辦', 'glass', '#6c5ce7', '#fd79a8'],
+        factory: ['紅磚廠房', 'factory', '#a45a42', '#55585f'], steel: ['鋼構工廠', 'factory', '#8c98a4', '#3b4654'],
+        barn: ['紅穀倉農舍', 'barn', '#c8553d', '#7b2d26'], farmhouse: ['木造農舍', 'gable', '#d9b98a', '#8c5a3c'], greenhouse: ['玻璃溫室', 'greenhouse', '#cfe8d8', '#6fbf8e'], windmill: ['風車農莊', 'windmill', '#e8d9a0', '#b0453a'],
+        cabin: ['林間木屋', 'gable', '#9c7a52', '#3e5c3a'], castle: ['石造城堡', 'castle', '#b8b8c0', '#5b4a8a'], pagoda: ['寶塔', 'pagoda', '#d9a066', '#8b1e1e']
+    };
+    const DEFS = ['cottage', 'glass', 'factory', 'barn', 'greenhouse', 'cabin'];   // 各用途的預設樣式（農田＝紅穀倉農舍）
+    const PC = ['#c0392b', '#e67e22', '#f1c40f', '#27ae60', '#16a085', '#2980b9', '#8e44ad', '#e84393', '#ecf0f1', '#95a5a6', '#34495e', '#6d4c41'];
+    function building(p, o, hq, dark, lvo) {
+        const farm = !hq && p.u === 3, lv = lvo || (hq ? 6 : Math.max(o.b || 0, farm ? 1 : 0)); if (!lv) return;
+        const { sx, sy, sw, sh, hh } = geo(p, lv), k = V.k, fy = sy + sh - hh, fl = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); };
+        const key = hq ? 'glass' : (o.st && STY[o.st] ? o.st : DEFS[p.u] || 'cottage'), shape = STY[key][1];
+        const wall = hq ? '#7ea6e6' : o.wc != null && PC[o.wc] ? PC[o.wc] : STY[key][2], roof = hq ? '#3f6fd0' : o.rc != null && PC[o.rc] ? PC[o.rc] : STY[key][3];
+        fl(sx + sw, sy + sh * .2, hh * .4 + 1, sh * .8 + hh * .1, 'rgba(0,0,0,.24)'); fl(sx + 1, sy + sh, sw, Math.max(2, k * .22), 'rgba(0,0,0,.24)');                                   // 影子
+        if (shape === 'barn' && sw > 1.6 * k) { const bw = Math.max(.5 * k, sw * .2), bx = sx + sw + .08 * k; fl(bx, fy - .7 * k, bw, hh + .7 * k, '#c9ced6'); ctx.fillStyle = '#9aa2ad'; ctx.beginPath(); ctx.arc(bx + bw / 2, fy - .7 * k, bw / 2, Math.PI, 0); ctx.fill(); fl(bx, fy - .7 * k + hh * .4, bw, 1, 'rgba(0,0,0,.25)'); }   // 筒倉
+        fl(sx, fy, sw, hh, shape === 'greenhouse' ? 'rgba(205,235,220,.92)' : wall); fl(sx + sw - Math.max(1, k * .18), fy, Math.max(1, k * .18), hh, 'rgba(0,0,0,.14)');
+        for (let f = 1; f < lv; f++) fl(sx, sy + sh - f * .7 * k, sw, 1, 'rgba(0,0,0,.16)');
+        if (k >= 7) {
+            const n = Math.max(1, Math.floor(sw / (.75 * k))), ww = .3 * k, wh = .34 * k, wcol = hq || shape === 'glass' ? '#e6f2ff' : dark ? '#ffd76a' : '#bfe3ff';
+            if (shape === 'glass') { for (let f = 0; f < lv; f++) fl(sx + .1 * k, sy + sh - (f + 1) * .7 * k + .14 * k, sw - .2 * k, .4 * k, dark ? 'rgba(255,220,120,.85)' : 'rgba(225,242,255,.8)'); for (let i = 1; i < n; i++) fl(sx + i * sw / n, fy, 1, hh, 'rgba(0,0,0,.18)'); }
+            else if (shape === 'greenhouse') { for (let i = 1; i < n + 2; i++) fl(sx + i * sw / (n + 2), fy, 1, hh, 'rgba(60,120,90,.5)'); ctx.fillStyle = '#4caf50'; for (let i = 0; i < n + 1; i++) { ctx.beginPath(); ctx.arc(sx + (i + .5) * sw / (n + 1), sy + sh - .22 * k, .17 * k, 0, 6.3); ctx.fill(); } }
+            else if (shape === 'barn') { const dw = Math.min(sw * .5, 1.1 * k), dh = Math.min(hh, .9 * k), dx = sx + sw / 2 - dw / 2; fl(dx, sy + sh - dh, dw, dh, '#f3ece0'); ctx.strokeStyle = wall; ctx.lineWidth = Math.max(1, k * .09); ctx.beginPath(); ctx.moveTo(dx, sy + sh - dh); ctx.lineTo(dx + dw, sy + sh); ctx.moveTo(dx + dw, sy + sh - dh); ctx.lineTo(dx, sy + sh); ctx.stroke(); if (lv > 1) fl(sx + sw / 2 - .15 * k, sy + sh - dh - .5 * k, .3 * k, .3 * k, '#f3ece0'); }
+            else { for (let f = 0; f < lv; f++) for (let i = 0; i < n; i++) { if (f === 0 && i === (n >> 1) && n % 2) continue; fl(sx + (i + .5) * sw / n - ww / 2, sy + sh - (f + 1) * .7 * k + .16 * k, ww, wh, wcol); } fl(sx + sw / 2 - .17 * k, sy + sh - .44 * k, .34 * k, .44 * k, '#5b3a24'); }
+        }
+        const tw = sw + .12 * k, tx0 = sx - .06 * k, ty0 = sy - hh;                                                                                                            // 屋頂（頂面）
+        fl(tx0, ty0, tw, sh, shape === 'greenhouse' ? 'rgba(225,245,232,.95)' : shape === 'dome' || shape === 'castle' ? wall : roof); fl(sx + .12 * k, ty0 + .12 * k, Math.max(1, sw - .24 * k), Math.max(1, sh * .3), 'rgba(255,255,255,.2)');
+        if (shape === 'gable' || shape === 'windmill') { fl(tx0, ty0 + sh / 2, tw, sh / 2, 'rgba(0,0,0,.16)'); fl(tx0, ty0 + sh / 2, tw, 1, 'rgba(0,0,0,.3)'); }
+        else if (shape === 'barn') { for (let i = 1; i <= 3; i++) fl(tx0, ty0 + sh * i / 4, tw, 1, 'rgba(0,0,0,.28)'); fl(tx0, ty0 + sh / 2, tw, sh / 2, 'rgba(0,0,0,.1)'); }
+        else if (shape === 'flat') { fl(tx0 + .1 * k, ty0 + .1 * k, tw * .28, sh * .35, 'rgba(0,0,0,.22)'); fl(tx0 + tw * .6, ty0 + sh * .4, tw * .25, sh * .3, 'rgba(0,0,0,.18)'); }
+        else if (shape === 'dome') { ctx.fillStyle = roof; ctx.beginPath(); ctx.arc(sx + sw / 2, ty0 + sh * .62, Math.min(sw * .45, sh * .6), Math.PI, 0); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,.28)'; ctx.beginPath(); ctx.arc(sx + sw * .42, ty0 + sh * .45, Math.min(sw * .12, sh * .15), 0, 6.3); ctx.fill(); }
+        else if (shape === 'pagoda') { const ew = Math.max(2, .24 * k); fl(sx - .32 * k, fy + hh * .42, sw + .64 * k, ew, roof); fl(sx - .32 * k, fy + hh * .42 + ew - 1, sw + .64 * k, 1, 'rgba(0,0,0,.3)'); fl(sx + sw / 2 - .1 * k, ty0 - .55 * k, .2 * k, .55 * k, roof); }
+        else if (shape === 'greenhouse') { for (let i = 1; i < 6; i++) fl(tx0 + tw * i / 6, ty0, 1, sh, 'rgba(60,120,90,.45)'); }
+        else if (shape === 'factory') { for (let i = 0; i < 3; i++) fl(tx0, ty0 + sh * i / 3, tw, sh / 3, i % 2 ? 'rgba(0,0,0,.18)' : 'rgba(255,255,255,.18)'); if (k >= 5) { fl(sx + sw * .7, ty0 - .9 * k, .34 * k, 1.1 * k, '#5b5f68'); ctx.fillStyle = 'rgba(255,255,255,.65)'; ctx.beginPath(); ctx.arc(sx + sw * .7 + .17 * k, ty0 - 1.15 * k, .26 * k, 0, 6.3); ctx.fill(); } }
+        else if (shape === 'castle') { const n = Math.max(3, Math.floor(sw / (.5 * k))); for (let i = 0; i < n; i++) fl(tx0 + i * tw / n + .04 * k, ty0 - .26 * k, tw / n * .55, .3 * k, wall); fl(tx0 - .1 * k, ty0 - .7 * k, .5 * k, .8 * k + 1, roof); fl(tx0 + tw - .4 * k, ty0 - .7 * k, .5 * k, .8 * k + 1, roof); }
+        if (shape === 'glass' && lv >= 3 && k >= 5) { ctx.strokeStyle = '#444'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(sx + sw / 2, ty0); ctx.lineTo(sx + sw / 2, ty0 - 1.1 * k); ctx.stroke(); fl(sx + sw / 2 - 1.5, ty0 - 1.1 * k - 2, 3, 3, '#ff4d4d'); }
+        if (shape === 'windmill' && k >= 5) { const cx = sx + sw / 2, cy = ty0 + sh * .3, L = Math.min(1.2 * k, sw * .6); ctx.strokeStyle = '#f5f0e6'; ctx.lineWidth = Math.max(1.5, k * .2); ctx.beginPath(); for (let a = .8; a < 7; a += 1.5708) { ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a) * L, cy + Math.sin(a) * L); } ctx.stroke(); fl(cx - .12 * k, cy - .12 * k, .24 * k, .24 * k, '#6d4c41'); }
+        ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.lineWidth = 1; ctx.strokeRect(tx0, ty0, tw, sh + hh);
+        if (o.d && k > 4) { ctx.font = Math.min(26, k * 2) + 'px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#000'; ctx.fillText(Trade.emoji(o.d), sx + sw / 2, sy - hh + sh / 2); }   // 展示品
+    }
+
+    // ---------- 建築樣式（玩家自訂）----------
+    let ST = null, STP = null;
+    const closeStyle = () => { if (ST) { ST.remove(); ST = null; } };
+    function openStyle(p) { closeStyle(); STP = p; ST = document.createElement('div'); ST.className = 'w-sheet'; ST.style.zIndex = 8; ov.appendChild(ST); ST.onclick = styleClick; renderStyle(); }
+    function preview(p, o) {
+        const cv2 = ST && ST.querySelector('#w-prev'); if (!cv2) return; const c2 = cv2.getContext('2d'), sv = [ctx, V.x, V.y, V.k];
+        c2.setTransform(2, 0, 0, 2, 0, 0); c2.clearRect(0, 0, 130, 95); c2.fillStyle = isDark() ? '#2d4a2d' : '#a5d675'; c2.fillRect(0, 0, 130, 95);
+        ctx = c2; V.k = 12; V.x = 24; V.y = 30; building({ bb: [0, 0, 5, 4], u: p.u, x: 0, y: 0 }, Object.assign({}, o, { d: undefined }), false, isDark(), Math.max(o.b || 1, 2));
+        ctx = sv[0]; V.x = sv[1]; V.y = sv[2]; V.k = sv[3];
+    }
+    function renderStyle() {
+        if (!ST) return; const p = STP, o = S[p.i] || {}, cur = o.st && STY[o.st] ? o.st : DEFS[p.u] || 'cottage', ks = Object.keys(STY), sc = ST.scrollTop;
+        const sw = (kk) => PC.map((c, i) => `<button class="w-sw ${o[kk] === i ? 'on' : ''}" style="background:${c}" data-y="${kk}:${i}"></button>`).join('');
+        ST.innerHTML = `<div class="w-hd"><b>🎨 建築樣式　#${p.i}</b><button class="w-x2" data-y="x">✕</button></div><canvas id="w-prev" width="260" height="190" style="display:block;margin:0 auto 10px;width:130px;height:95px;border-radius:14px"></canvas>`
+            + `<div class="w-sub">樣式（${ks.length} 種）</div><div class="w-sty">${ks.map(k => `<button class="w-sc ${k === cur ? 'on' : ''}" data-y="st:${k}"><i style="background:${STY[k][2]}"></i><i style="background:${STY[k][3]}"></i>${STY[k][0]}</button>`).join('')}</div>`
+            + `<div class="w-sub">屋頂顏色</div><div class="w-chips"><button class="w-chip ${o.rc == null ? 'on' : ''}" data-y="rc:-1">預設</button>${sw('rc')}</div><div class="w-sub">牆面顏色</div><div class="w-chips"><button class="w-chip ${o.wc == null ? 'on' : ''}" data-y="wc:-1">預設</button>${sw('wc')}</div>`;
+        ST.scrollTop = sc; preview(p, o);
+    }
+    async function styleClick(e) {
+        const b = e.target.closest('[data-y]'); if (!b) return; const [op, a] = b.dataset.y.split(':'); if (op === 'x') return closeStyle();
+        const p = STP, val = op === 'st' ? a : (+a < 0 ? null : +a);
+        try { const r = await ref(p.i).transaction(y => { if (!y || y.o !== uid) return; const z = Object.assign({}, y); if (val === null) delete z[op]; else z[op] = val; return z; }); if (r.committed) S[p.i] = r.snapshot.val(); else say('無法更改樣式'); }
+        catch (err) { console.error(err); say('連線失敗：' + (err && err.message ? err.message : err)); }
+        paintOwn(); renderStyle(); draw();
+    }
+
+    // ---------- 規則書 ----------
+    let RS = null;
+    const closeRules = () => { if (RS) { RS.remove(); RS = null; } };
+    const RULES = `<div class="w-hd"><b>📖 規則書</b><button class="w-x2" data-r="x">✕</button></div>
+<div class="w-rule-b"><h4>🌱 開工（種田、採礦、加工）</h4><p>只能在<b>自己的地</b>上開工，而且要同時滿足：<b>① 先雇用員工</b> ② 用途對得上（農田種作物、林地採礦伐木、工業用地加工）③ 金幣夠付費用 ④ 背包有足夠原料 ⑤ 這塊地沒有進行中的工作。按「🛠️ 選擇生產項目」選一項，時間到按「收成」，離線也會計時。</p>
+<h4>👷 員工（NPC，共 12 種）</h4><p>基本款：實習生、新手、熟手、專家（薪水越高產量越高）；專長款：資深農夫（作物）、礦工老手（採礦）、糕點師傅（食品）、建材技師、珠寶工匠（奢侈品）、金牌業務（商店）、研究員（全能）；還有不用吃飯的機器人。每次收成或營業，付「產出價值」的薪水並供 1 份食物（稻米、麵包或便當）。到下方「員工」分頁可定位、換人、解雇、一鍵收成。</p>
+<h4>🎨 建築樣式</h4><p>自己的地可以按「🎨 建築樣式」自訂：20 種樣式（小木屋、豪宅、玻璃大樓、紅穀倉、溫室、風車農莊、城堡、寶塔⋯）＋ 12 色屋頂與牆面。農田預設就是有筒倉和田畦的農舍。</p>
+<h4>🏗️ 蓋房子</h4><p>要金幣加建材：第 N 層要水泥 ×N，第 3 層起加鋼筋，第 4 層起加玻璃。樓層上限：市中心 5、市區 4、郊區 2、鄉村與山野 1。</p>
+<h4>🏪 商店與展示</h4><p>商業用地先「開張營業」，客人慢慢累積，按「賣給顧客」從背包賣商品；貨色越多樣營收越高。奢侈品只有市中心與市區的店賣得出去，也可以展示一件吸引客人。</p>
+<h4>🏠 買賣土地</h4><p>無主地直接買；自己的地可以「掛牌出售」（成交時收土地交易稅）或賣給系統（地價 90% ＋ 建築成本一半）。有合夥人或展品的地要先處理掉。</p>
+<h4>🛒 市場與政府商店</h4><p>玩家市場成交收交易稅；「🏛️ 政府」分頁隨時買得到所有物資（奢侈品除外），價格是參考價的 3 倍。</p>
+<h4>🏛️ 總統</h4><p>每週選出一位總統。總統可以調整：市場交易稅、土地交易稅、商店營業稅（稅金歸總統）、<b>全體玩家的資產稅倍率</b>（0～2 倍），可訂最多 2 項政策（農業補貼、礦業扶持、建設獎勵、商業振興、平價政府），還能發表演說，所有人進地圖都會看到。</p>
+<h4>🤝 合夥、💸 轉帳</h4><p>合夥人入股後，土地的收成與營收按比例分給他。好友轉帳在金幣視窗的「我的帳戶」：輸入對方暱稱和金額，按 Enter 或「確認轉帳」，對方下次開遊戲就會收到。</p>
+<h4>📶 連線不穩時</h4><p>操作遇到網路中斷會自動重試；若畫面顯示「連線失敗：…」，請把冒號後面的文字告訴開發者。</p></div>`;
+    function openRules() { if (RS) return closeRules(); closeStaff(); closeLand(); Trade.close(); landShown = false; panel(); RS = document.createElement('div'); RS.className = 'w-sheet'; RS.innerHTML = RULES; RS.onclick = e => { if (e.target.dataset && e.target.dataset.r === 'x') closeRules(); }; ov.appendChild(RS); syncDock(); }
 
     // ---------- 繪圖（像素圖層） ----------
     const PAL = {
@@ -181,17 +269,16 @@ const World = (() => {
             ctx.stroke();
         }
         const vis = parcels.filter(p => (p.bb[2] + 1) * V.k + V.x > 0 && p.bb[0] * V.k + V.x < W && (p.bb[3] + 1) * V.k + V.y > 0 && p.bb[1] * V.k + V.y < H);
-        if (V.k >= 3.5) vis.filter(p => p.hq !== undefined || (S[p.i] && S[p.i].b)).sort((a, b) => a.y - b.y).forEach(p => {   // 2.5D 建築
-            const o = S[p.i] || {}, hq = p.hq !== undefined, lv = hq ? 6 : o.b, hue = hq ? 220 : hueOf(o.o), w = p.bb[2] - p.bb[0] + 1, h = p.bb[3] - p.bb[1] + 1, m = Math.min(.8, Math.min(w, h) * .2);
-            const sx = (p.bb[0] + m) * V.k + V.x, sy = (p.bb[1] + m) * V.k + V.y, sw = (w - 2 * m) * V.k, sh = (h - 2 * m) * V.k, hh = lv * .7 * V.k, mine = o.o === uid;
-            ctx.fillStyle = `hsl(${hue},50%,${mine ? 40 : 34}%)`; ctx.fillRect(sx, sy + sh - hh, sw, hh);
-            ctx.fillStyle = mine ? '#ffd84d' : `hsl(${hue},62%,64%)`; ctx.fillRect(sx, sy - hh, sw, sh);
-            ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 1; ctx.strokeRect(sx, sy - hh, sw, sh + hh);
-            if (o.d && V.k > 4) { ctx.font = Math.min(26, V.k * 2.2) + 'px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(Trade.emoji(o.d), sx + sw / 2, sy - hh - 2); }
-        });
-        if (V.k >= 4) {                                                    // 地主名字
-            ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
-            vis.forEach(p => { const o = S[p.i]; if (!o) return; const nm = o.o === uid ? '你' : o.n || '?', sw = (p.bb[2] - p.bb[0] + 1) * V.k, fs = Math.min(15, sw / (nm.length * 1.05 + .3)); if (fs < 7) return; ctx.font = `600 ${fs}px system-ui,sans-serif`; const y = p.bb[1] * V.k + V.y - (o.b || 0) * .7 * V.k - fs * .45, x = (p.bb[0] + p.bb[2] + 1) / 2 * V.k + V.x; ctx.lineWidth = 3; ctx.strokeStyle = dark ? 'rgba(0,0,0,.8)' : 'rgba(255,255,255,.9)'; ctx.strokeText(nm, x, y); ctx.fillStyle = dark ? '#fff' : '#1b2330'; ctx.fillText(nm, x, y); });
+        if (V.k >= 6) { ctx.fillStyle = 'rgba(70,110,30,.4)'; vis.filter(p => p.u === 3).forEach(p => p.cells.forEach(c => { if ((c / N | 0) % 2 === 0) { const [fx, fy2] = tx(c % N, c / N | 0); ctx.fillRect(fx, fy2 + V.k * .3, V.k, Math.max(1, V.k * .22)); } })); }   // 田畦
+        if (V.k >= 3) vis.filter(p => p.hq !== undefined || (S[p.i] && (S[p.i].b || p.u === 3))).sort((a, b) => a.y - b.y).forEach(p => building(p, S[p.i] || {}, p.hq !== undefined, dark));
+        if (V.k >= 4.5) {                                                  // 地主名字：標在土地正上方的小標籤
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; const fs = clamp(V.k * 1.05, 9, 14); ctx.font = `700 ${fs}px system-ui,sans-serif`;
+            vis.forEach(p => {
+                const o = S[p.i]; if (!o) return; const nm = o.o === uid ? '你' : (o.n || '?'), g = geo(p, Math.max(o.b || 0, p.u === 3 ? 1 : 0)), tw = ctx.measureText(nm).width + 14, th = fs + 7, x = g.sx + g.sw / 2, y = g.sy - g.hh - th / 2 - 3;
+                ctx.fillStyle = 'rgba(0,0,0,.25)'; rr(ctx, x - tw / 2 + 1, y - th / 2 + 2, tw, th, th / 2); ctx.fill();
+                ctx.fillStyle = o.o === uid ? '#f5a800' : `hsl(${hueOf(o.o)},62%,42%)`; rr(ctx, x - tw / 2, y - th / 2, tw, th, th / 2); ctx.fill();
+                ctx.fillStyle = '#fff'; ctx.fillText(nm, x, y + .5);
+            });
         }
         if (sel) {                                                         // 選取框
             ctx.beginPath(); ctx.strokeStyle = '#ff3d71'; ctx.lineWidth = 2.5; const k = V.k;
@@ -240,6 +327,10 @@ const World = (() => {
 .w-sub{font-size:12px;font-weight:700;color:var(--sub);margin:12px 2px 6px;letter-spacing:.5px}
 .w-chips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 6px;align-items:center;font-size:12px;color:var(--sub)}.w-chip{padding:5px 12px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--fg);font-size:12px}.w-chip.on{background:var(--acc);color:#fff;border-color:transparent}
 .w-search{display:flex;gap:8px;margin-bottom:10px}.w-search input{flex:1;min-width:0;padding:11px 14px;border-radius:14px;border:1px solid var(--line);background:var(--rowbg);color:var(--fg);font-size:14px;outline:none}.w-go{padding:0 18px;border:0;border-radius:14px;background:var(--acc);color:#fff;font-weight:600}
+.w-rulebtn{position:absolute;right:12px;bottom:calc(88px + env(safe-area-inset-bottom));width:44px;height:44px;border-radius:50%;font-size:20px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);background:var(--card);color:var(--fg);box-shadow:var(--sh);z-index:3;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.w-rule-b{font-size:13.5px;line-height:1.75}.w-rule-b h4{margin:12px 0 2px;font-size:14px}.w-rule-b p{margin:0;color:var(--fg);opacity:.9}
+.w-sty{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.w-sc{display:flex;align-items:center;gap:6px;padding:9px 10px;border-radius:14px;border:1px solid var(--line);background:var(--rowbg);color:var(--fg);text-align:left;font-size:13px}.w-sc i{width:12px;height:22px;border-radius:4px;display:inline-block;border:1px solid var(--line)}.w-sc.on{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc) inset}
+.w-sw{width:30px;height:30px;border-radius:50%;border:2px solid var(--line);padding:0}.w-sw.on{border-color:var(--acc);transform:scale(1.15);box-shadow:0 0 0 2px var(--card),0 0 0 4px var(--acc)}
 .w-empty{padding:18px 8px;text-align:center;color:var(--sub);font-size:13px}
 .w-sum{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}.w-sum div{padding:10px;border-radius:14px;background:var(--rowbg);text-align:center;line-height:1.4}.w-sum b{display:block;font-size:15px}
 </style>`;
@@ -249,11 +340,11 @@ const World = (() => {
         const el = $q('.w-panel'); el.hidden = !landShown; if (!landShown) return;
         let h = '<button class="px" data-a="hide">✕</button>';
         if (!sel) { el.innerHTML = h + '<div style="opacity:.7;padding-right:24px">點地圖上的一塊地看看。可拖曳移動、雙指縮放；放大後會顯示地主名字。</div>'; return; }
-        if (sel.hq !== undefined) { const st = Economy.stocks()[sel.hq]; el.innerHTML = h + `<div><b>🏢 ${esc(st.name)} 總部</b>　${ZN[sel.z]}</div><div>現價 🪙${Economy.stockPrice(st).toFixed(1)}　・　公司用地不能買賣，周圍地價 +12%</div><div class="w-btns"><button data-a="stk">📈 查看股票</button></div>`; return; }
+        if (sel.hq !== undefined) { const st = Economy.stocks().filter(s => !s.cat || s.cat === 'stock')[sel.hq]; el.innerHTML = h + `<div><b>🏢 ${esc(st.name)} 總部</b>　${ZN[sel.z]}</div><div>現價 🪙${Economy.stockPrice(st).toFixed(1)}　・　公司用地不能買賣，周圍地價 +12%</div><div class="w-btns"><button data-a="stk">📈 查看股票</button></div>`; return; }
         const o = S[sel.i], pr = price(sel), b = o ? (o.b || 0) : 0, cap = CAP[sel.z];
         h += `<div><b>#${sel.i}　${U[sel.u]}用地</b>　${ZN[sel.z]}・${TN[sel.t]}</div><div><small>面積 ${sel.a} 格　樓層 ${b}/${cap}${sel.wf ? '　🌊 臨水' : ''}</small></div><div>地主：${o ? (o.o === uid ? '你' : esc(o.n)) : '無主'}　・　地價 🪙${pr}</div>${o && o.d ? `<div>🖼️ 展示中：${Trade.label(o.d)}</div>` : ''}${o && o.ls ? `<div>🏷️ 掛牌價 🪙${o.ls}</div>` : ''}<div class="w-btns">`;
         if (!o) h += `<button data-a="buy">買地 🪙${pr}</button>`;
-        else if (o.o === uid) { if (b < cap) h += `<button data-a="up">${b ? '加蓋一層' : '蓋房子'} 🪙${buildCost(sel, b + 1)} ${Trade.needText(Trade.need(b + 1))}</button>`; h += `<button data-a="sell">賣出 🪙${Math.round(pr * SELL + builtValue(sel) * .5)}</button>`; h += `<button data-a="${o.ls ? 'unlist' : 'list'}">${o.ls ? '取消掛牌 🪙' + o.ls : '🏷️ 掛牌出售'}</button>` + Trade.buttons(sel, o); } else if (o.ls) h += `<button data-a="buyls">買下 🪙${o.ls}</button>`;
+        else if (o.o === uid) { if (b < cap) h += `<button data-a="up">${b ? '加蓋一層' : '蓋房子'} 🪙${buildCost(sel, b + 1)} ${Trade.needText(Trade.need(b + 1))}</button>`; h += `<button data-a="sell">賣出 🪙${Math.round(pr * SELL + builtValue(sel) * .5)}</button>`; h += '<button data-a="style">🎨 建築樣式</button>' + `<button data-a="${o.ls ? 'unlist' : 'list'}">${o.ls ? '取消掛牌 🪙' + o.ls : '🏷️ 掛牌出售'}</button>` + Trade.buttons(sel, o); } else if (o.ls) h += `<button data-a="buyls">買下 🪙${o.ls}</button>`;
         el.innerHTML = h + '</div>';
     }
     function profile() {
@@ -261,7 +352,7 @@ const World = (() => {
         $q('.w-cn').innerHTML = `🪙 ${Economy.coins()}　<small>總資產 💰 ${w}</small>`;
         $q('.w-bd').innerHTML = `🪙 現金　${Economy.coins()}<br>📈 股票　${stocksV()}<br>🏠 地產・背包　${Number(localStorage.getItem('vk_assets')) || 0}<br><b>💰 總資產　${w}</b>`;
     }
-    const refreshAll = () => { if (!ov) return; if (loaded) localStorage.setItem('vk_assets', assets()); paintOwn(); profile(); panel(); if (LS) renderLand(); draw(); };
+    const refreshAll = () => { if (!ov) return; if (loaded) localStorage.setItem('vk_assets', assets()); paintOwn(); profile(); panel(); if (LS) renderLand(); if (SS) renderStaff(); draw(); };
     const tick = () => { if (!ov) return; const d = new Date(); $q('.w-clk b').textContent = d.toTimeString().slice(0, 5); $q('.w-clk small').textContent = `${d.getMonth() + 1}/${d.getDate()} 週${'日一二三四五六'[d.getDay()]}`; };
     function calHtml() {
         const d = new Date(), y = d.getFullYear(), m = d.getMonth(), first = new Date(y, m, 1).getDay(), days = new Date(y, m + 1, 0).getDate(), ms = typeof Civic !== 'undefined' ? Civic.nextTerm() : 0;
@@ -269,16 +360,16 @@ const World = (() => {
         for (let i = 1; i <= days; i++) h += `<i class="${i === d.getDate() ? 'td' : ''}">${i}</i>`;
         return h + `</div><div style="margin-top:8px"><small>🏛️ 下屆總統上任倒數 ${Math.floor(ms / 864e5)} 天 ${Math.floor(ms % 864e5 / 36e5)} 小時</small></div>`;
     }
-    const DK = { bag: ['🎒', '背包', 'sell'], market: ['🛒', '市場', 'buy'], land: ['🗺️', '土地'], pres: ['🏛️', '總統', 'civ'], jv: ['🤝', '合夥', 'jv'], job: ['👷', '人力', 'job'], exit: ['🚪', '離開'] };
-    function syncDock() { if (!ov) return; const cur = Trade.current(); ov.querySelectorAll('.w-dock button').forEach(b => { const d = DK[b.dataset.d]; b.classList.toggle('on', d[2] ? d[2] === cur : b.dataset.d === 'land' && !!LS); }); }
-    const showLand = v => { landShown = v; if (v) { Trade.close(); closeLand(); } panel(); syncDock(); };
+    const DK = { bag: ['🎒', '背包', 'sell'], market: ['🛒', '市場', 'buy'], land: ['🗺️', '土地'], staff: ['👷', '員工'], pres: ['🏛️', '總統', 'civ'], jv: ['🤝', '合夥', 'jv'], exit: ['🚪', '離開'] };
+    function syncDock() { if (!ov) return; const cur = Trade.current(); ov.querySelectorAll('.w-dock button').forEach(b => { const d = DK[b.dataset.d]; b.classList.toggle('on', d[2] ? d[2] === cur : (b.dataset.d === 'land' && !!LS) || (b.dataset.d === 'staff' && !!SS)); }); }
+    const showLand = v => { landShown = v; if (v) { Trade.close(); closeLand(); closeRules(); closeStaff(); closeStyle(); } panel(); syncDock(); };
     const tctx = () => ({ uid, say, refresh: refreshAll, name: myName, root: ov, S: () => S, info: i => parcels[i] ? U[parcels[i].u] + '・' + ZN[parcels[i].z] : '?', use: i => parcels[i] ? parcels[i].u : 3, sync: syncDock });
 
     // ---------- 土地：搜尋 / 房地產市場 / 我的土地 ----------
     let LS = null, LT = 'search', fz = -1, fu = -1, srt = 'p', ex = -1, qv = '';
     const UI = ['🏠', '🏬', '🏭', '🌾', '🌳', '⛰️'];
     const closeLand = () => { if (LS) { LS.remove(); LS = null; } syncDock(); };
-    function openLand() { if (LS) return closeLand(); Trade.close(); landShown = false; panel(); LS = document.createElement('div'); LS.className = 'w-sheet'; ov.appendChild(LS); LS.onclick = landClick; renderLand(); syncDock(); }
+    function openLand() { if (LS) return closeLand(); closeRules(); closeStaff(); Trade.close(); landShown = false; panel(); LS = document.createElement('div'); LS.className = 'w-sheet'; ov.appendChild(LS); LS.onclick = landClick; renderLand(); syncDock(); }
     const priceOf = p => { const o = S[p.i]; return o && o.ls ? o.ls : price(p); };
     function rowHtml(p) {
         const o = S[p.i], st = o ? Trade.status(o) : '';
@@ -320,6 +411,29 @@ const World = (() => {
     }
     function goto(p) { closeLand(); sel = p; const w = p.bb[2] - p.bb[0] + 1, h = p.bb[3] - p.bb[1] + 1; V.k = clamp(Math.min(W * .6 / w, H * .3 / h), 10, 26); center((p.bb[0] + p.bb[2] + 1) / 2, (p.bb[1] + p.bb[3] + 1) / 2, .32); showLand(true); draw(); }
 
+    // ---------- 員工管理 ----------
+    let SS = null;
+    const closeStaff = () => { if (SS) { SS.remove(); SS = null; } syncDock(); };
+    const prod = p => p.u === 1 || [2, 3, 5].includes(p.u);
+    function openStaff() { if (SS) return closeStaff(); closeRules(); closeLand(); Trade.close(); landShown = false; panel(); SS = document.createElement('div'); SS.className = 'w-sheet'; ov.appendChild(SS); SS.onclick = staffClick; renderStaff(); syncDock(); }
+    function renderStaff() {
+        if (!SS) return; const st = SS.scrollTop;
+        const mine = Object.keys(S).filter(i => parcels[i] && S[i].o === uid && prod(parcels[i])).map(i => parcels[i]), hired = mine.filter(p => S[p.i].e), idle = mine.filter(p => !S[p.i].e && p.u !== 1), ready = mine.filter(p => S[p.i].w && Trade.ready(S[p.i]));
+        let h = `<div class="w-hd"><b>👷 員工管理</b><button class="w-x2" data-s="x">✕</button></div><div class="w-sum"><div><small>員工</small><b>${hired.length} 人</b></div><div><small>可收成</small><b>${ready.length} 處</b></div><div><small>缺員工</small><b>${idle.length} 處</b></div></div>`;
+        h += `<div class="w-btns" style="margin:0 0 6px"><button data-s="all" ${ready.length ? '' : 'disabled'}>📦 一鍵收成全部（${ready.length}）</button></div>`;
+        h += '<div class="w-sub">已雇用</div>' + (hired.map(p => { const e = S[p.i].e; return `<div class="w-row"><div class="lri">${UI[p.u]}</div><div class="lrm"><b>${esc(e.n)}</b><small>#${p.i} ${U[p.u]}・${ZN[p.z]}　薪水 ${Math.round(e.p * 100)}%・產量 ×${e.m}${e.t ? '・' + e.t : ''}</small><small>${Trade.status(S[p.i])}</small></div><span><button data-s="go:${p.i}">📍</button><button data-s="chg:${p.i}">換人</button><button data-s="fire:${p.i}">解雇</button></span></div>`; }).join('') || '<div class="w-empty">還沒有員工。農田、林地、工業用地要先雇用員工才能開工</div>');
+        if (idle.length) h += '<div class="w-sub">缺員工的生產地（還不能開工）</div>' + idle.map(p => `<div class="w-row"><div class="lri">${UI[p.u]}</div><div class="lrm"><b>#${p.i} ${U[p.u]}</b><small>${ZN[p.z]}　${Trade.status(S[p.i]) || '閒置中'}</small></div><span><button data-s="go:${p.i}">📍</button><button data-s="hire:${p.i}">雇用</button></span></div>`).join('');
+        SS.innerHTML = h; SS.scrollTop = st;
+    }
+    async function staffClick(e) {
+        const b = e.target.closest('[data-s]'); if (!b) return; const [op, a] = b.dataset.s.split(':'), p = parcels[+a];
+        if (op === 'x') return closeStaff(); if (op === 'go') return goto(p);
+        if (op === 'all') { for (const q of Object.keys(S).map(i => parcels[i]).filter(q => q && S[q.i].o === uid && S[q.i].w && Trade.ready(S[q.i]))) await Trade.act('t:h', q, S, tctx()); return; }
+        if (op === 'hire') return Trade.act('t:hm', p, S, tctx());
+        if (op === 'fire') return Trade.act('t:f', p, S, tctx());
+        if (op === 'chg') { await Trade.act('t:f', p, S, tctx()); return Trade.act('t:hm', p, S, tctx()); }
+    }
+
     // ---------- 操作 ----------
     async function act(a) {
         const p = sel; if (!p || p.hq !== undefined) return; const pr = price(p);
@@ -327,7 +441,7 @@ const World = (() => {
             if (a === 'buy') {
                 if (Economy.coins() < pr) return say('金幣不夠喔！');
                 const r = await ref(p.i).transaction(v => v ? undefined : { o: uid, n: myName(), b: 0, t: pr });
-                if (!r.committed) { say('被別人搶先買走了！'); return load(); }
+                if (!r.committed) { const cur = r.snapshot && r.snapshot.val(); if (cur && cur.o === uid) { S[p.i] = cur; say('這塊地已經是你的了'); return refreshAll(); } say('被別人搶先買走了！'); return load(); }
                 Economy.add(-pr, '買地'); S[p.i] = r.snapshot.val(); say('🏞️ 買到了！');
             } else if (a === 'up') {
                 const b = (S[p.i] || {}).b || 0, c = buildCost(p, b + 1);
@@ -349,7 +463,7 @@ const World = (() => {
                 if (Economy.coins() < cost) return say('金幣不夠喔！');
                 const r = await ref(p.i).transaction(y => { if (!y || y.ls !== cost || y.o === uid || y.s || y.d || y.e) return; const z = Object.assign({}, y, { o: uid, n: myName(), t: cost }); delete z.ls; delete z.j; delete z.po; return z; });
                 if (!r.committed) { say('已被買走或價格變了'); return load(); }
-                Economy.add(-cost, '購買掛牌土地'); const tax = Math.floor(cost * Civic.fee());
+                Economy.add(-cost, '購買掛牌土地'); const tax = Math.floor(cost * Civic.landFee());
                 firebase.database().ref('world/mail/' + seller).push({ c: cost - tax, t: Date.now() }); Civic.tax(tax); S[p.i] = r.snapshot.val(); say('🏠 成交！');
             } else if (a === 'sell') {
                 if ((S[p.i] || {}).s || (S[p.i] || {}).d) return say('有合夥人或展品，不能直接賣出（先收回展品）');
@@ -358,12 +472,12 @@ const World = (() => {
                 if (!r.committed) return say('無法賣出');
                 delete S[p.i]; Economy.add(get, '賣地');
             }
-        } catch (e) { say('連線失敗，請稍後再試'); }
+        } catch (e) { console.error(e); say('連線失敗：' + (e && e.message ? e.message : e)); }
         refreshAll();
     }
-    const tctxLoad = () => Trade.load(tctx()).then(refreshAll).catch(() => { });
+    const tctxLoad = () => Trade.load(tctx()).then(() => { refreshAll(); const sp = Civic.speech(); if (sp) say('📣 總統 ' + sp.n + '：' + sp.t.slice(0, 60)); }).catch(() => { });
     function load() { tctxLoad(); return ref().once('value').then(s => { S = s.val() || {}; loaded = true; refreshAll(); }).catch(() => say('讀取世界資料失敗')); }
-    function close() { if (!ov) return; if (loaded) localStorage.setItem('vk_assets', assets()); Trade.close(); closeLand(); clearInterval(clk); removeEventListener('resize', onResize); ov.remove(); ov = null; ctx = null; report(); }
+    function close() { if (!ov) return; if (loaded) localStorage.setItem('vk_assets', assets()); Trade.close(); closeLand(); closeRules(); closeStaff(); closeStyle(); clearInterval(clk); removeEventListener('resize', onResize); ov.remove(); ov = null; ctx = null; report(); }
     const onResize = () => { if (ov) { fit(); draw(); } };
 
     function open() {
@@ -374,7 +488,7 @@ const World = (() => {
             + '<div class="card w-me"><div class="w-av"></div><div class="w-mi"><b class="w-nm"></b><span class="w-cn"></span></div></div><div class="card w-bd" hidden></div>'
             + '<div class="card w-clk"><b>--:--</b><small></small></div><div class="card w-cal" hidden></div><div class="w-toast"></div>'
             + '<div class="card w-panel" hidden></div>'
-            + '<div class="card w-dock">' + Object.keys(DK).map(k => `<button data-d="${k}"><span>${DK[k][0]}</span>${DK[k][1]}</button>`).join('') + '</div>';
+            + '<button class="w-rulebtn" data-d="rules">📖</button><div class="card w-dock">' + Object.keys(DK).map(k => `<button data-d="${k}"><span>${DK[k][0]}</span>${DK[k][1]}</button>`).join('') + '</div>';
         document.body.appendChild(ov); cv = $q('canvas'); ctx = cv.getContext('2d');
         fit(); sel = null; landShown = false; addEventListener('resize', onResize); tick(); clk = setInterval(tick, 20000); syncDock();
         say('🗺️ 地圖生成中…第一次需要幾秒，之後會記住');
@@ -384,12 +498,13 @@ const World = (() => {
         }, 50);
         $q('.w-me').onclick = () => { const b = $q('.w-bd'); b.hidden = !b.hidden; };
         $q('.w-clk').onclick = () => { const c = $q('.w-cal'); c.hidden = !c.hidden; if (!c.hidden) c.innerHTML = calHtml(); };
+        $q('.w-rulebtn').onclick = openRules;
         $q('.w-dock').onclick = e => {
             const b = e.target.closest('button'); if (!b) return; const k = b.dataset.d;
-            if (k === 'exit') return close(); if (k === 'land') return openLand();
-            closeLand(); landShown = false; panel(); Trade.market(tctx(), DK[k][2]); syncDock();
+            if (k === 'exit') return close(); if (k === 'land') return openLand(); if (k === 'staff') return openStaff();
+            closeRules(); closeLand(); closeStaff(); landShown = false; panel(); Trade.market(tctx(), DK[k][2]); syncDock();
         };
-        $q('.w-panel').onclick = e => { const a = e.target.dataset && e.target.dataset.a; if (a === 'hide') showLand(false); else if (a === 'stk') Economy.open('stock'); else if (a) a.startsWith('t:') ? Trade.act(a, sel, S, tctx()) : act(a); };
+        $q('.w-panel').onclick = e => { const a = e.target.dataset && e.target.dataset.a; if (a === 'hide') showLand(false); else if (a === 'stk') Economy.open('market'); else if (a === 'style') openStyle(sel); else if (a) a.startsWith('t:') ? Trade.act(a, sel, S, tctx()) : act(a); };
         const ptr = new Map(); let moved = 0, d0 = 0;
         cv.onpointerdown = e => { cv.setPointerCapture(e.pointerId); ptr.set(e.pointerId, [e.clientX, e.clientY]); moved = 0; if (ptr.size === 2) { const [a, b] = [...ptr.values()]; d0 = Math.hypot(a[0] - b[0], a[1] - b[1]); } };
         cv.onpointermove = e => {
@@ -410,6 +525,16 @@ const World = (() => {
     }
     matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (ov) { paintBase(); draw(); } });
     const btn = document.getElementById('btn-goto-world'); if (btn) btn.onclick = open;
-    setTimeout(report, 5000);
-    return { wealth, report, open, parcels: () => parcels.length, stats: () => ({ towns: towns.length, parcels: parcels.length }) };
+    // ---------- 好友轉帳（給 economy.js 用）：用排行榜的玩家名單找人，錢寄到對方信箱 ----------
+    async function findPlayer(name) {
+        const all = (await firebase.database().ref('leaderboard_rich').once('value')).val() || {}, lq = String(name).trim().toLowerCase(), hits = Object.keys(all).filter(u => (all[u].name || '').toLowerCase() === lq);
+        if (!hits.length) return { ok: false, msg: '找不到這位玩家（對方要設定過暱稱，並至少開過一次遊戲）' };
+        if (hits.length > 1) return { ok: false, msg: '有多位同名玩家，請對方改成獨一無二的暱稱' };
+        if (hits[0] === uid) return { ok: false, msg: '不能轉帳給自己' };
+        return { ok: true, uid: hits[0], name: all[hits[0]].name };
+    }
+    const sendCoins = (to, amt) => firebase.database().ref('world/mail/' + to).push({ c: amt, t: Date.now(), from: myName() });
+    async function claimMail() { try { let got = null; await wrapRef(firebase.database().ref('world/mail/' + uid)).transaction(v => { got = v; return null; }); const sum = got ? Object.values(got).reduce((a, m) => a + (m.c || 0), 0) : 0; if (sum > 0) Economy.add(sum, '收到匯款／收入'); } catch (e) { } }
+    setTimeout(report, 5000); setTimeout(claimMail, 6000);
+    return { findPlayer, sendCoins, claimMail, wealth, report, open, parcels: () => parcels.length, stats: () => ({ towns: towns.length, parcels: parcels.length }) };
 })();

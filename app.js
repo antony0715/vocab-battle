@@ -48,7 +48,7 @@ let wrongQuestionsList = []; // 本局錯題 [{word, correctMeaning, level, user
 let isCurrentQuestionMarked = false, markAddedNew = false;
 let lastSummaryHtml = '';
 let lbTab = 'time';
-const lbData = { time: [], score: [], mj: [] };
+const lbData = { time: [], score: [], mj: [], rich: [] };
 let sessionRecorded = false, sessionStart = 0, sessionMaxCombo = 0; // 個人檔案紀錄用
 let scoreboardFrozen = false, lastPlayersSnapshot = null;           // 多人結算後凍結計分板
 const hasProfile = () => typeof Profile !== 'undefined';
@@ -768,7 +768,8 @@ $('btn-back-bank').onclick = () => {
 function updateBestTimeUI() {
     const el = $('best-record-text');
     if (!el) return;
-    if (lbTab === 'mj') {
+    if (lbTab === 'rich') el.textContent = `我的總資產：${typeof World !== 'undefined' ? World.wealth() : 0} 🪙`;
+    else if (lbTab === 'mj') {
         const t = (typeof Profile !== 'undefined' && Profile.getMjBestTai) ? Profile.getMjBestTai() : 0;
         el.textContent = `我的最高紀錄：${t} 台`;
     } else el.textContent = lbTab === 'time' ? `我的最高紀錄：${bestSurvivalSeconds} 秒` : `我的最高紀錄：${bestScore} 分`;
@@ -778,7 +779,7 @@ function renderLeaderboard() {
     const el = $('leaderboard-list');
     if (!el) return;
     const list = lbData[lbTab];
-    const unit = lbTab === 'time' ? '秒' : lbTab === 'mj' ? '台' : '分';
+    const unit = lbTab === 'time' ? '秒' : lbTab === 'mj' ? '台' : lbTab === 'rich' ? '🪙' : '分';
     if (!list || !list.length) {
         el.innerHTML = '<div class="lb-empty">載入中...</div>';
         return;
@@ -791,8 +792,8 @@ function renderLeaderboard() {
 }
 
 // 排行榜只在進入網頁時讀取一次（once），之後要按「🔄」才會重新抓，不持續監聽，避免佔用資源
-let lbLoaded = { time: false, score: false, mj: false }, lbRefreshing = false;
-const lbRefs = () => ({ time: dbRef, score: scoreRef, mj: mjRef });
+let lbLoaded = { time: false, score: false, mj: false, rich: false }, lbRefreshing = false;
+const lbRefs = () => ({ time: dbRef, score: scoreRef, mj: mjRef, rich: firebase.database().ref('leaderboard_rich') });
 function loadBoard(ref, key) {
     return ref.once('value').then(snap => {
         const data = snap.val();
