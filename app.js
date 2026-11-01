@@ -1945,8 +1945,8 @@ function triggerHealEffect(n = 10) { floatText(`+${n}`, 'floating-heal', 'row-fl
 // ==================== 📢 更新跑馬燈 ====================
 // 內容存在 Firebase「announcement」，進入首頁時讀取一次。
 // 管理者：連點喇叭圖示 5 次 → 輸入管理密碼 → 輸入新公告（留空 = 關閉跑馬燈）
-const NEWS_ADMIN_PIN = '1234'; // ← 請改成你自己的密碼
-const NEWS_DEFAULT = '';        // 沒有公告時顯示的預設文字（留空 = 不顯示）
+const NEWS_ADMIN_PIN = '0715'; // ← 請改成你自己的密碼
+const NEWS_DEFAULT = '現在單字庫有更好的優化! 玩麻將跟股票之餘請記得多背單字 股票的bug還在努力修正中';        // 沒有公告時顯示的預設文字（留空 = 不顯示）
 (function initNewsBar() {
     const bar = $('news-bar'), txt = $('news-text'), icon = $('news-icon');
     if (!bar || !txt) return;
