@@ -402,13 +402,26 @@ function mulberry32(a) {
     };
 }
 
+// 把「放棄、拋棄」拆成 ['放棄','拋棄']，用來比對是否有重複的中文意思
+function meaningParts(m) {
+    return String(m || '')
+        .replace(/[（(][^）)]*[）)]/g, '')      // 去掉括號註解
+        .split(/[、，,；;\/／\s]+/)
+        .map(s => s.replace(/^[的地得]|[的地得]$/g, '').trim()) // 「抽象的」與「抽象」視為同一個意思
+        .filter(Boolean);
+}
+
 function makeQuestion(pool, dPool, rng = Math.random) {
     const t = pool[Math.floor(rng() * pool.length)];
     const opts = [t.meaning];
+    const correctParts = meaningParts(t.meaning);
     let guard = 0;
     while (opts.length < 4 && guard++ < 500) {
         const m = dPool[Math.floor(rng() * dPool.length)].meaning;
-        if (!opts.includes(m)) opts.push(m);
+        if (opts.includes(m)) continue;
+        // 干擾選項不能含有和正解相同的中文意思（避免誤會）
+        if (meaningParts(m).some(p => correctParts.includes(p))) continue;
+        opts.push(m);
     }
     for (let i = opts.length - 1; i > 0; i--) { // Fisher-Yates 洗牌
         const j = Math.floor(rng() * (i + 1));
@@ -1926,4 +1939,46 @@ function triggerHealEffect(n = 10) { floatText(`+${n}`, 'floating-heal', 'row-fl
     };
     ['fullscreenchange', 'webkitfullscreenchange'].forEach(ev => document.addEventListener(ev, () => { refresh(); window.dispatchEvent(new Event('resize')); }));
     refresh();
+})();
+
+
+// ==================== 📢 更新跑馬燈 ====================
+// 內容存在 Firebase「announcement」，進入首頁時讀取一次。
+// 管理者：連點喇叭圖示 5 次 → 輸入管理密碼 → 輸入新公告（留空 = 關閉跑馬燈）
+const NEWS_ADMIN_PIN = '1234'; // ← 請改成你自己的密碼
+const NEWS_DEFAULT = '';        // 沒有公告時顯示的預設文字（留空 = 不顯示）
+(function initNewsBar() {
+    const bar = $('news-bar'), txt = $('news-text'), icon = $('news-icon');
+    if (!bar || !txt) return;
+    const newsRef = firebase.database().ref('announcement');
+    function render(t) {
+        t = String(t || NEWS_DEFAULT || '').trim();
+        txt.textContent = t;
+        bar.classList.toggle('hidden', !t);
+        // 依文字長度調整速度，每秒約捲 60px
+        const sec = Math.max(10, Math.round((t.length * 16 + 300) / 60));
+        txt.style.animationDuration = sec + 's';
+    }
+    try { render(localStorage.getItem('vocab_news_cache')); } catch (e) { render(''); }
+    newsRef.once('value').then(s => {
+        const v = s.val();
+        const t = v && typeof v === 'object' ? v.text : '';
+        try { localStorage.setItem('vocab_news_cache', t || ''); } catch (e) { }
+        render(t);
+    }).catch(() => { });
+
+    let taps = 0, tapTimer = null;
+    icon.onclick = () => {
+        taps++; clearTimeout(tapTimer); tapTimer = setTimeout(() => taps = 0, 1500);
+        if (taps < 5) return;
+        taps = 0;
+        if (prompt('請輸入管理密碼') !== NEWS_ADMIN_PIN) { alert('密碼錯誤'); return; }
+        const cur = txt.textContent || '';
+        const input = prompt('請輸入跑馬燈公告內容（留空 = 關閉跑馬燈）', cur);
+        if (input === null) return;
+        const t = input.trim().slice(0, 200);
+        newsRef.set(t ? { text: t, ts: firebase.database.ServerValue.TIMESTAMP } : null)
+            .then(() => { try { localStorage.setItem('vocab_news_cache', t); } catch (e) { } render(t); alert(t ? '✅ 已更新公告' : '✅ 已關閉跑馬燈'); })
+            .catch(() => alert('更新失敗，請檢查網路或 Firebase 規則'));
+    };
 })();

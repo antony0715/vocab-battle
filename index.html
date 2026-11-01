@@ -27,6 +27,17 @@
     <!-- Firebase SDK (Realtime Database) -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <style>
+        /* 📢 更新跑馬燈 */
+        .news-bar { display: flex; align-items: center; gap: 8px; width: 100%; box-sizing: border-box; margin: 0 0 10px; padding: 7px 12px; border-radius: 12px; background: #eff6ff; color: #1e3a8a; border: 1px solid #bfdbfe; font-size: 14px; overflow: hidden; }
+        body.dark-mode .news-bar { background: #1e293b; color: #bfdbfe; border-color: #334155; }
+        .news-bar .news-icon { flex: none; }
+        .news-bar .news-track { flex: 1; overflow: hidden; white-space: nowrap; position: relative; min-height: 1.4em; }
+        .news-bar .news-text { display: inline-block; padding-left: 100%; animation: news-scroll 18s linear infinite; }
+        .news-bar:active .news-text { animation-play-state: paused; }
+        @keyframes news-scroll { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+        .news-bar.hidden { display: none; }
+    </style>
 </head>
 
 <body>
@@ -35,6 +46,12 @@
 
         <!-- ==================== 1. 遊戲大廳畫面 ==================== -->
         <div id="lobby-screen" class="screen">
+
+            <!-- 📢 更新跑馬燈（管理者：連點喇叭 5 次可編輯內容） -->
+            <div id="news-bar" class="news-bar hidden">
+                <span id="news-icon" class="news-icon">📢</span>
+                <div class="news-track"><span id="news-text" class="news-text"></span></div>
+            </div>
 
 
             <h1>英語單字King</h1>
