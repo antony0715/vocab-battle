@@ -991,4 +991,3 @@ const level6Vocab = [
   { word: "wrinkle", pos: "n./v.", meaning: "皺紋；起皺", level: 6 },
 ];
 
-export default level6Vocab;

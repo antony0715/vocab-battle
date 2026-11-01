@@ -996,4 +996,3 @@ const level3Vocab = [
   { word: "wrist", pos: "n.", meaning: "手腕", level: 3 },
 ];
 
-export default level3Vocab;

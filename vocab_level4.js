@@ -987,4 +987,3 @@ const level4Vocab = [
   { word: "wreck", pos: "n./v.", meaning: "摧毀；殘骸", level: 4 },
 ];
 
-export default level4Vocab;

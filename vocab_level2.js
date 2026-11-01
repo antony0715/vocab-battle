@@ -987,4 +987,3 @@ const level2Vocab = [
   { word: "wound", pos: "n./v.", meaning: "傷口；使受傷", level: 2 },
 ];
 
-export default level2Vocab;

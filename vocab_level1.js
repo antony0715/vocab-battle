@@ -993,4 +993,3 @@ const level1Vocab = [
   { word: "write", pos: "v.", meaning: "寫", level: 1 },
 ];
 
-export default level1Vocab;

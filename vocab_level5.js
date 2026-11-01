@@ -1002,4 +1002,3 @@ const level5Vocab = [
   { word: "worthy", pos: "adj.", meaning: "值得的；有價值的", level: 5 },
 ];
 
-export default level5Vocab;
