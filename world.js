@@ -3,7 +3,7 @@
 // 依賴：firebase、Economy、Trade、Civic、esc、Profile
 const World = (() => {
     // ---------- 可調整的數值 ----------
-    const BASE = [7000, 3200, 1400, 600, 800],   // 通膨：地價 ×20
+    const BASE = [30000, 14000, 6000, 2600, 3500],   // 通膨：市中心最便宜的小地也要 1 萬以上
          CAP = [5, 4, 2, 1, 1], AREA = [4, 8, 14, 24, 40], MAXA = [6, 12, 20, 36, 60];
     const ZN = ['市中心', '市區', '郊區', '鄉村', '山野'];
     const U = ['住宅', '商業', '工業', '農田', '公園', '林地'];
@@ -137,7 +137,8 @@ const World = (() => {
     const builtValue = p => { let s = 0; for (let k = 1; k <= ((S[p.i] || {}).b || 0); k++) s += buildCost(p, k); return s; };
     const assets = () => { let s = 0; Object.keys(S).forEach(i => { const o = S[i], p = parcels[i]; if (p && o.o === uid) s += price(p) + builtValue(p) + (o.d ? Trade.value(o.d) : 0); }); return Math.round(s + Trade.invValue()); };
     const stocksV = () => Math.round(Economy.stocksValue ? Economy.stocksValue() : 0);
-    const wealth = () => Math.round(Economy.coins() + stocksV() + (Number(localStorage.getItem('vk_assets')) || 0));
+    const bankNet = () => Economy.bankNet ? Economy.bankNet() : 0;
+    const wealth = () => Math.round(Economy.coins() + bankNet() + stocksV() + (Number(localStorage.getItem('vk_assets')) || 0));
     function report() { const name = myName(); if (!name || name === '請輸入暱稱') return; try { firebase.database().ref('leaderboard_rich/' + uid).set({ name, score: wealth(), timestamp: firebase.database.ServerValue.TIMESTAMP }); } catch (e) { } }
     const hueOf = s => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
 
@@ -221,9 +222,12 @@ const World = (() => {
 <h4>🎨 建築樣式</h4><p>自己的地可以按「🎨 建築樣式」自訂：20 種樣式（小木屋、豪宅、玻璃大樓、紅穀倉、溫室、風車農莊、城堡、寶塔⋯）＋ 12 色屋頂與牆面。農田預設就是有筒倉和田畦的農舍。</p>
 <h4>🏗️ 蓋房子</h4><p>要金幣加建材：第 N 層要水泥 ×N，第 3 層起加鋼筋，第 4 層起加玻璃。樓層上限：市中心 5、市區 4、郊區 2、鄉村與山野 1。</p>
 <h4>🏪 商店與展示</h4><p>商業用地先「開張營業」，客人慢慢累積，按「賣給顧客」從背包賣商品；貨色越多樣營收越高。奢侈品只有市中心與市區的店賣得出去，也可以展示一件吸引客人。</p>
+<h4>🏞️ 土地持有稅</h4><p>只要擁有土地，每天（第一次開遊戲時）要繳土地稅：<b>購地價（每多一層加 25%）× 稅率</b>，預設 1.5%，由總統在 0～5% 之間調整，稅金歸總統。地圖左上角的資產卡片可以看到預估金額。</p>
 <h4>🏠 買賣土地</h4><p>無主地直接買；自己的地可以「掛牌出售」（成交時收土地交易稅）或賣給系統（地價 90% ＋ 建築成本一半）。有合夥人或展品的地要先處理掉。</p>
 <h4>🛒 市場與政府商店</h4><p>玩家市場成交收交易稅；「🏛️ 政府」分頁隨時買得到所有物資（奢侈品除外），價格是參考價的 3 倍。</p>
 <h4>🏛️ 總統</h4><p>每週選出一位總統。總統可以調整：市場交易稅、土地交易稅、商店營業稅（稅金歸總統）、<b>全體玩家的資產稅倍率</b>（0～2 倍），可訂最多 2 項政策（農業補貼、礦業扶持、建設獎勵、商業振興、平價政府），還能發表演說，所有人進地圖都會看到。</p>
+<h4>🏦 銀行</h4><p>金幣視窗的「🏦 銀行」分頁：<b>存款不計入資產稅</b>，每天還有 0.4% 利息；隨時可提領（領回手上就會計稅）。貸款額度是淨資產的一半（至少 20,000），日利率 1.5%，7 天內要還清；逾期利率升到 4%，銀行會強制扣你的存款和金幣，還清前不能再借。貸款可以從應稅資產中扣除。在地圖左上角的資產卡片也能直接前往銀行。</p>
+<h4>🔻 負債</h4><p>手上金幣不夠付稅、薪水等費用時，會<b>變成負數（負債）</b>：每天加 3% 透支利息、不能買東西；銀行有存款會自動補上，也可以去銀行借款來還。</p>
 <h4>🤝 合夥、💸 轉帳</h4><p>合夥人入股後，土地的收成與營收按比例分給他。好友轉帳在金幣視窗的「我的帳戶」：輸入對方暱稱和金額，按 Enter 或「確認轉帳」，對方下次開遊戲就會收到。</p>
 <h4>📶 連線不穩時</h4><p>操作遇到網路中斷會自動重試；若畫面顯示「連線失敗：…」，請把冒號後面的文字告訴開發者。</p></div>`;
     function openRules() { if (RS) return closeRules(); closeStaff(); closeLand(); Trade.close(); landShown = false; panel(); RS = document.createElement('div'); RS.className = 'w-sheet'; RS.innerHTML = RULES; RS.onclick = e => { if (e.target.dataset && e.target.dataset.r === 'x') closeRules(); }; ov.appendChild(RS); syncDock(); }
@@ -350,7 +354,7 @@ const World = (() => {
     function profile() {
         const w = wealth(); $q('.w-av').textContent = (myName() || '玩').slice(0, 1); $q('.w-nm').textContent = myName();
         $q('.w-cn').innerHTML = `🪙 ${Economy.coins()}　<small>總資產 💰 ${w}</small>`;
-        $q('.w-bd').innerHTML = `🪙 現金　${Economy.coins()}<br>📈 股票　${stocksV()}<br>🏠 地產・背包　${Number(localStorage.getItem('vk_assets')) || 0}<br><b>💰 總資產　${w}</b>`;
+        $q('.w-bd').innerHTML = `🪙 現金　${Economy.coins()}<br>🏦 銀行淨額（免稅）　${bankNet()}<br>🏞️ 預估每日土地稅　${Math.round(landBase(S) * (Civic.landTax ? Civic.landTax() : 0))}<br>📈 股票　${stocksV()}<br>🏠 地產・背包　${Number(localStorage.getItem('vk_assets')) || 0}<br><b>💰 總資產　${w}</b><div class="w-btns" style="margin-top:6px"><button data-bk="1" style="flex:1 1 100%;padding:8px">🏦 前往銀行</button></div>`;
     }
     const refreshAll = () => { if (!ov) return; if (loaded) localStorage.setItem('vk_assets', assets()); paintOwn(); profile(); panel(); if (LS) renderLand(); if (SS) renderStaff(); draw(); };
     const tick = () => { if (!ov) return; const d = new Date(); $q('.w-clk b').textContent = d.toTimeString().slice(0, 5); $q('.w-clk small').textContent = `${d.getMonth() + 1}/${d.getDate()} 週${'日一二三四五六'[d.getDay()]}`; };
@@ -496,6 +500,7 @@ const World = (() => {
             if (!ov) return; ensure(); lb = lb || mk(); lt = lt || mk(); lo = lo || mk(); paintBase(); paintUse();
             const big = towns[0]; V.k = 6; center(big ? big.x : N / 2, big ? big.y : N / 2); refreshAll(); load();
         }, 50);
+        $q('.w-bd').onclick = e => { if (e.target.dataset && e.target.dataset.bk) Economy.open('bank'); };
         $q('.w-me').onclick = () => { const b = $q('.w-bd'); b.hidden = !b.hidden; };
         $q('.w-clk').onclick = () => { const c = $q('.w-cal'); c.hidden = !c.hidden; if (!c.hidden) c.innerHTML = calHtml(); };
         $q('.w-rulebtn').onclick = openRules;
@@ -535,6 +540,18 @@ const World = (() => {
     }
     const sendCoins = (to, amt) => firebase.database().ref('world/mail/' + to).push({ c: amt, t: Date.now(), from: myName() });
     async function claimMail() { try { let got = null; await wrapRef(firebase.database().ref('world/mail/' + uid)).transaction(v => { got = v; return null; }); const sum = got ? Object.values(got).reduce((a, m) => a + (m.c || 0), 0) : 0; if (sum > 0) Economy.add(sum, '收到匯款／收入'); } catch (e) { } }
-    setTimeout(report, 5000); setTimeout(claimMail, 6000);
+    // ---------- 土地持有稅：每天一次，按購地價（含樓層）× 總統訂的稅率，歸總統 ----------
+    const landBase = all => { let b = 0; Object.keys(all).forEach(i => { const o = all[i]; if (o && o.o === uid) b += (o.t || 0) * (1 + .25 * (o.b || 0)); }); return b; };
+    async function landTax() {
+        try {
+            const k = new Date().toDateString(); if (localStorage.getItem('vk_landtax') === k) return;
+            await Civic.load({ uid }).catch(() => { });
+            const all = (await firebase.database().ref('world/parcels').once('value')).val() || {};
+            localStorage.setItem('vk_landtax', k);
+            const tax = Math.round(landBase(all) * Civic.landTax());
+            if (tax > 0) { Economy.add(-tax, '🏞️ 土地持有稅'); Civic.tax(tax); }
+        } catch (e) { }
+    }
+    setTimeout(report, 5000); setTimeout(claimMail, 6000); setTimeout(landTax, 8000);
     return { findPlayer, sendCoins, claimMail, wealth, report, open, parcels: () => parcels.length, stats: () => ({ towns: towns.length, parcels: parcels.length }) };
 })();

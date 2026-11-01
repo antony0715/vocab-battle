@@ -17,7 +17,7 @@ const Trade = (() => {
         watch: ['製手錶', 20, 1, 40, { steel: 2, goldore: 1 }], gem: ['琢磨鑽石', 30, 1, 60, { ore: 6, steel: 1 }], ring: ['打造金戒指', 25, 1, 50, { goldore: 2, gem: 1 }], car: ['組裝跑車', 40, 1, 120, { steel: 5, glass: 2 }] };
     const USEW = { 3: ['rice', 'wheat', 'veg', 'tea', 'fruit', 'cotton', 'coffee', 'milk', 'grape'], 5: ['sand', 'ore', 'wood', 'coal', 'goldore'],
         2: ['cement', 'steel', 'glass', 'furniture', 'book', 'clothes', 'bread', 'bento', 'cake', 'tdrink', 'juice', 'latte', 'wine', 'watch', 'gem', 'ring', 'car'] };   // 農田 / 林地(礦山) / 工業
-    const GOOD_X = 10;   // 通膨：全部物資、種子／原料費 ×10
+    const GOOD_X = 40;   // 通膨：全部物資、種子／原料費 ×40
     Object.keys(IT).forEach(k => IT[k][2] *= GOOD_X); Object.keys(WORK).forEach(k => WORK[k][3] *= GOOD_X);
     // 員工目錄：[圖示, 稱號, 薪水占產出價值, 基本倍率, 專長群組, 專長額外倍率, 不用吃飯, 說明]
     const EMP = [

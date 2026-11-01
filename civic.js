@@ -29,8 +29,8 @@ const Civic = (() => {
     const db = () => ({ ref: p => wrapRef(firebase.database().ref(p)) }), now = () => Date.now(), WEEK = 7 * 864e5, T = () => Math.floor(now() / WEEK);
     const val = p => db().ref('world/' + p).once('value').then(s => s.val());
     const POLS = { farm: ['🌾', '農業補貼', '種植費用 −50%'], mine: ['⛏️', '礦業扶持', '採礦伐木費用 −50%'], build: ['🏗️', '建設獎勵', '蓋房金幣費用 −30%'], shop: ['🏪', '商業振興', '商店營收 +15%'], gov: ['🛒', '平價政府', '政府商店價格 ×2（原 ×3）'] };
-    const DEF = () => ({ r: .05, l: .05, b: 0, tm: 1, pol: {}, sp: '' });
-    const RANGE = { r: [0, .1, .01], l: [0, .1, .01], b: [0, .15, .01], tm: [0, 2, .25] };
+    const DEF = () => ({ r: .05, l: .05, b: 0, tm: 1, lt: .015, pol: {}, sp: '' });
+    const RANGE = { r: [0, .1, .01], l: [0, .1, .01], b: [0, .15, .01], tm: [0, 2, .25], lt: [0, .05, .005] };
     let M = null, RT = DEF(), CAND = {}, VOTED = null;
 
     async function load(C) {
@@ -43,17 +43,17 @@ const Civic = (() => {
     const fee = () => RT.r, landFee = () => RT.l, bizTax = () => RT.b, taxMult = () => RT.tm, pol = k => !!RT.pol[k];
     const speech = () => M && RT.sp ? { n: M.n, t: RT.sp } : null;
     const tax = amt => M && amt > 0 ? db().ref('world/mail/' + M.u).push({ c: amt, t: now() }) : Promise.resolve();
-    const pct = v => Math.round(v * 100) + '%';
+    const pct = v => (Math.round(v * 1000) / 10) + '%';
 
     function rows(tab, C) {
         if (tab === 'civ') {
             const mine = M && M.u === C.uid, ctl = (k, label) => `<div class="w-row"><div class="lrm"><b>${label[0]}</b><small>${label[1]}</small></div><div class="lrp">${k === 'tm' ? '×' + RT.tm : pct(RT[k])}</div>${mine ? `<span><button data-m="tx:${k}:-1">−</button><button data-m="tx:${k}:1">＋</button></span>` : ''}</div>`;
             let h = `<div class="w-row" style="align-items:flex-start"><div class="lri">${M ? '🧑‍⚖️' : '🏛️'}</div><div class="lrm"><b>${M ? esc(M.n) : '（尚無總統）'}${mine ? '（你）' : ''}</b><small>本週總統　${M ? '' : '還沒有人當選，使用預設稅率'}</small>${RT.sp ? `<div style="margin-top:6px;font-size:13px;line-height:1.6">📣 「${esc(RT.sp)}」</div>` : (M ? '<small>尚未發表演說</small>' : '')}</div>${mine ? '<span><button data-m="sp:0">📣 演說</button></span>' : ''}</div>`;
-            h += '<div class="w-sub">💰 稅率（全體玩家適用）</div>' + ctl('r', ['市場交易稅', '玩家市場成交時收取，歸總統']) + ctl('l', ['土地交易稅', '玩家之間買賣掛牌土地時收取，歸總統']) + ctl('b', ['商店營業稅', '商店賣給顧客的營收被抽成，歸總統']) + ctl('tm', ['資產稅倍率', '國稅局每日資產稅 × 此倍率（0 = 免稅）']);
+            h += '<div class="w-sub">💰 稅率（全體玩家適用）</div>' + ctl('r', ['市場交易稅', '玩家市場成交時收取，歸總統']) + ctl('l', ['土地交易稅', '玩家之間買賣掛牌土地時收取，歸總統']) + ctl('b', ['商店營業稅', '商店賣給顧客的營收被抽成，歸總統']) + ctl('tm', ['資產稅倍率', '國稅局每日資產稅 × 此倍率（0 = 免稅）']) + ctl('lt', ['土地持有稅（每天）', '地主每天按購地價（含樓層）繳納，歸總統']);
             const act = Object.keys(POLS).filter(k => pol(k));
             h += `<div class="w-sub">📜 本週政策（最多 2 項${mine ? '，點選切換' : ''}）</div><div class="w-chips">` + Object.keys(POLS).map(k => { const P = POLS[k]; return mine ? `<button class="w-chip ${pol(k) ? 'on' : ''}" data-m="pl:${k}:0">${P[0]} ${P[1]}　${P[2]}</button>` : (pol(k) ? `<span class="w-chip on">${P[0]} ${P[1]}　${P[2]}</span>` : ''); }).join('') + (!mine && !act.length ? '<small>目前沒有政策</small>' : '') + '</div>';
             h += '<div class="w-sub">🗳️ 下屆選舉（每週一屆，本週票數最高者下週上任）</div>';
-            return h + (CAND[C.uid] ? '' : '<div class="w-row">想當總統？<span><button data-m="r:0">參選（報名費 500🪙）</button></span></div>')
+            return h + (CAND[C.uid] ? '' : '<div class="w-row">想當總統？<span><button data-m="r:0">參選（報名費 5,000🪙）</button></span></div>')
                 + (Object.entries(CAND).sort((a, b) => (b[1].v || 0) - (a[1].v || 0)).map(([u, c]) => `<div class="w-row">${esc(c.n)}　${c.v || 0} 票<span>${VOTED ? (VOTED === u ? '✅ 已投' : '') : `<button data-m="v:${u}">投票</button>`}</span></div>`).join('') || '<div class="w-empty">還沒有人參選</div>');
         }
         const all = Object.entries(C.S()), mine = all.filter(([i, x]) => x.s && x.s.u === C.uid), open = all.filter(([i, x]) => x.po && !x.s && x.o !== C.uid);
@@ -64,11 +64,11 @@ const Civic = (() => {
 
     async function handle(op, a, C, n) {
         const say = C.say, isPres = M && M.u === C.uid;
-        const save = async () => { await db().ref('world/rate/' + T()).set({ u: C.uid, r: RT.r, l: RT.l, b: RT.b, tm: RT.tm, pol: RT.pol, sp: RT.sp, spt: now() }); };
+        const save = async () => { await db().ref('world/rate/' + T()).set({ u: C.uid, r: RT.r, l: RT.l, b: RT.b, tm: RT.tm, lt: RT.lt, pol: RT.pol, sp: RT.sp, spt: now() }); };
         if (op === 'r') {
-            if (Economy.coins() < 500) return say('金幣不夠（報名費 500）');
+            if (Economy.coins() < 5000) return say('金幣不夠（報名費 5,000）');
             const r = await db().ref('world/elect/' + T() + '/cand/' + C.uid).transaction(x => x ? undefined : { n: C.name(), v: 0 });
-            if (r.committed) { Economy.add(-500, '參選報名費'); say('已報名參選！'); }
+            if (r.committed) { Economy.add(-5000, '參選報名費'); say('已報名參選！'); }
         } else if (op === 'v') {
             const r = await db().ref('world/elect/' + T() + '/voted/' + C.uid).transaction(x => x ? undefined : a);
             if (!r.committed) return say('這週你已經投過票了');
@@ -90,5 +90,5 @@ const Civic = (() => {
         }
         await load(C);
     }
-    return { load, fee, landFee, bizTax, taxMult, pol, speech, tax, rows, handle, nextTerm: () => (T() + 1) * WEEK - now() };
+    return { load, fee, landFee, landTax: () => RT.lt, bizTax, taxMult, pol, speech, tax, rows, handle, nextTerm: () => (T() + 1) * WEEK - now() };
 })();
