@@ -361,7 +361,7 @@ function getVocabByLevels(levels) {
             const k = String(v.word || '').trim().toLowerCase();
             if (!k || seen.has(k)) return;
             seen.add(k);
-            byLevel[l].push({ word: v.word, meaning: v.meaning, level: l, pos: v.pos || '', ex: v.example || v.ex || v.sentence || '', exZh: v.exampleZh || v.exZh || v.example_zh || '' });
+            byLevel[l].push({ word: v.word, meaning: v.meaning, level: l, pos: v.pos || '' });
         });
     });
     let out = [];
@@ -498,67 +498,6 @@ function posOf(w) {
     const c = WordInfo.cached(w.word); return c && c.pos && c.pos.length ? c.pos.join('/') : '';
 }
 
-
-// ==================== 2-0. 例句（內建欄位 → 線上查詢，查過會快取）====================
-// 題庫若有 example / ex / sentence 欄位就直接用；沒有的話，連線到 dictionaryapi.dev（英文例句）與 Tatoeba（中英對照例句）查詢。
-const Examples = (() => {
-    const KEY = 'vocab_examples_v1', enc = encodeURIComponent;
-    let cache = {}; try { cache = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { }
-    const save = () => {
-        const ks = Object.keys(cache);
-        if (ks.length > 400) ks.slice(0, ks.length - 400).forEach(k => delete cache[k]);
-        try { localStorage.setItem(KEY, JSON.stringify(cache)); } catch (e) { }
-    };
-    const getJson = url => fetch(url).then(r => r.ok ? r.json() : null).catch(() => null);
-    const hasWord = (s, w) => new RegExp('\\b' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(s);
-    async function fromDict(word) {
-        const j = await getJson('https://api.dictionaryapi.dev/v2/entries/en/' + enc(word));
-        if (!Array.isArray(j)) return { ok: false, list: [] };
-        const out = [];
-        j.forEach(en => (en.meanings || []).forEach(m => (m.definitions || []).forEach(d => {
-            if (d.example && d.example.length < 160) out.push({ en: d.example.trim(), zh: '' });
-        })));
-        return { ok: true, list: out };
-    }
-    async function fromTatoeba(word) {
-        const j = await getJson(`https://tatoeba.org/en/api_v0/search?from=eng&to=cmn&query=${enc(word)}&trans_filter=limit&trans_to=cmn&sort=relevance`);
-        if (!j || !Array.isArray(j.results)) return { ok: false, list: [] };
-        const out = [];
-        j.results.forEach(r => {
-            if (!r.text || r.text.length > 140 || !hasWord(r.text, word)) return;
-            const tr = [].concat(...(r.translations || [])).find(t => t && t.lang === 'cmn' && t.text);
-            if (tr) out.push({ en: r.text.trim(), zh: tr.text.trim() });
-        });
-        return { ok: true, list: out };
-    }
-    async function get(word, builtin) {
-        const key = word.toLowerCase();
-        if (cache[key] && cache[key].length) return cache[key];
-        const [d, t] = await Promise.all([fromDict(word), fromTatoeba(word)]);
-        const seen = new Set(); let list = [];
-        [...(builtin || []), ...t.list, ...d.list].forEach(x => { const k = x.en.toLowerCase(); if (!seen.has(k)) { seen.add(k); list.push(x); } });
-        list.sort((x, y) => (y.zh ? 1 : 0) - (x.zh ? 1 : 0));
-        list = list.slice(0, 4);
-        if (list.length) { cache[key] = list; save(); }
-        return list;
-    }
-    return { get };
-})();
-let _exToken = 0;
-function renderExamples(word) {
-    const box = $('wd-examples'); if (!box) return;
-    const my = ++_exToken;
-    const v = vocabLookup(word);
-    const builtin = v && v.ex ? [{ en: v.ex, zh: v.exZh || '' }] : [];
-    const re = new RegExp('(\\b' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\w*)', 'gi');
-    const show = list => {
-        box.innerHTML = list.length
-            ? list.map(x => `<div class="ex-row"><div class="ex-en">${esc(x.en).replace(re, '<b>$1</b>')}</div>${x.zh ? `<div class="ex-zh">${esc(x.zh)}</div>` : ''}</div>`).join('')
-            : '<div class="ex-empty">查不到這個字的例句（可能是離線或字典沒收錄），可以用下方的劍橋辭典查詢。</div>';
-    };
-    if (builtin.length) show(builtin); else box.innerHTML = '<div class="ex-empty">例句載入中…</div>';
-    Examples.get(word, builtin).then(list => { if (my === _exToken) show(list); }).catch(() => { if (my === _exToken) show(builtin); });
-}
 
 // ==================== 2. 我的錯題庫 (localStorage) ====================
 function loadBank() {
@@ -810,7 +749,6 @@ function renderWordDetail() {
     $('wd-memory-block').style.display = inBank ? '' : 'none';
     $('btn-word-known').classList.toggle('hidden', !inBank);
     $('btn-word-add').classList.toggle('hidden', inBank);
-    renderExamples(w.word);
     $('wd-word').textContent = w.word;
     $('wd-meaning').textContent = w.meaning || '';
     $('wd-level').textContent = LEVEL_LABEL[w.level] || '';
