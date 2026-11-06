@@ -38,6 +38,19 @@
         @keyframes news-scroll { from { transform: translateX(0); } to { transform: translateX(-100%); } }
         .news-bar.hidden { display: none; }
     </style>
+    <style id="lib-extra-style">
+        .bank-mode { display: flex; gap: 8px; margin: 8px 0; }
+        .bank-mode .lb-tab { flex: 1; }
+        .bank-row.is-lib .bank-remove.lib-add { background: var(--ok, #2e9d5b); color: #fff; border-color: transparent; }
+        .bank-row.is-lib .bank-remove.lib-added { background: transparent; color: var(--muted, #888); border: 1px solid var(--muted, #888); opacity: .8; }
+        .lib-more { width: 100%; margin: 10px 0; }
+        .ex-box { display: flex; flex-direction: column; gap: 8px; margin-bottom: 6px; }
+        .ex-row { padding: 10px 12px; border-radius: 10px; background: var(--card, rgba(128, 128, 128, .12)); text-align: left; }
+        .ex-en { font-size: 15px; line-height: 1.5; }
+        .ex-en b { color: var(--warn, #e6a100); }
+        .ex-zh { font-size: 13px; color: var(--muted, #888); margin-top: 3px; line-height: 1.4; }
+        .ex-empty { font-size: 13px; color: var(--muted, #888); padding: 6px 0; }
+    </style>
 </head>
 
 <body>
@@ -347,6 +360,10 @@
                 <span id="wd-pos" class="pos-badge"></span><span id="wd-level" class="lv-badge"></span>
             </div>
 
+            <h3 class="section-title">✍️ 例句</h3>
+            <div class="ex-box" id="wd-examples"></div>
+
+            <div id="wd-memory-block">
             <div class="stat-cards" id="wd-stats"></div>
             <div id="wd-next" class="wd-next"></div>
 
@@ -356,6 +373,7 @@
 
             <h3 class="section-title" data-collapse="word_history">🕘 複習時間紀錄</h3>
             <div class="hist-list" id="wd-history"></div>
+            </div>
 
             <h3 class="section-title">🔎 查更多</h3>
             <div class="link-row">
@@ -366,6 +384,7 @@
             </div>
 
             <div class="btn-grid">
+                <button id="btn-word-add" class="btn btn-primary hidden">＋ 加入錯題庫</button>
                 <button id="btn-word-known" class="btn btn-danger">✓ 我會了（移出錯題庫）</button>
                 <button id="btn-word-back" class="btn btn-secondary">返回錯題庫</button>
             </div>
@@ -376,6 +395,11 @@
             <h1>📚 我的錯題庫</h1>
             <p class="subtitle">(點擊單字查看詳情)</p>
             <p class="subtitle" id="bank-count">共 0 個單字</p>
+
+            <div class="bank-mode" id="bank-mode-tabs">
+                <button class="lb-tab active" data-mode="mine">📚 我的錯題</button>
+                <button class="lb-tab" data-mode="lib">🔎 單字庫搜尋（1~6級）</button>
+            </div>
 
             <div class="bank-tabs" id="bank-level-tabs">
                 <button class="lb-tab active" data-level="all">全部</button>

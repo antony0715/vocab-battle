@@ -361,7 +361,7 @@ function getVocabByLevels(levels) {
             const k = String(v.word || '').trim().toLowerCase();
             if (!k || seen.has(k)) return;
             seen.add(k);
-            byLevel[l].push({ word: v.word, meaning: v.meaning, level: l, pos: v.pos || '' });
+            byLevel[l].push({ word: v.word, meaning: v.meaning, level: l, pos: v.pos || '', ex: v.example || v.ex || v.sentence || '', exZh: v.exampleZh || v.exZh || v.example_zh || '' });
         });
     });
     let out = [];
@@ -498,6 +498,68 @@ function posOf(w) {
     const c = WordInfo.cached(w.word); return c && c.pos && c.pos.length ? c.pos.join('/') : '';
 }
 
+
+// ==================== 2-0. 例句（內建欄位 → 線上查詢，查過會快取）====================
+// 題庫若有 example / ex / sentence 欄位就直接用；沒有的話，連線到 dictionaryapi.dev（英文例句）與 Tatoeba（中英對照例句）查詢。
+const Examples = (() => {
+    const KEY = 'vocab_examples_v1', enc = encodeURIComponent;
+    let cache = {}; try { cache = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { }
+    const save = () => {
+        const ks = Object.keys(cache);
+        if (ks.length > 400) ks.slice(0, ks.length - 400).forEach(k => delete cache[k]);
+        try { localStorage.setItem(KEY, JSON.stringify(cache)); } catch (e) { }
+    };
+    const getJson = url => fetch(url).then(r => r.ok ? r.json() : null).catch(() => null);
+    const hasWord = (s, w) => new RegExp('\\b' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(s);
+    async function fromDict(word) {
+        const j = await getJson('https://api.dictionaryapi.dev/v2/entries/en/' + enc(word));
+        if (!Array.isArray(j)) return { ok: false, list: [] };
+        const out = [];
+        j.forEach(en => (en.meanings || []).forEach(m => (m.definitions || []).forEach(d => {
+            if (d.example && d.example.length < 160) out.push({ en: d.example.trim(), zh: '' });
+        })));
+        return { ok: true, list: out };
+    }
+    async function fromTatoeba(word) {
+        const j = await getJson(`https://tatoeba.org/en/api_v0/search?from=eng&to=cmn&query=${enc(word)}&trans_filter=limit&trans_to=cmn&sort=relevance`);
+        if (!j || !Array.isArray(j.results)) return { ok: false, list: [] };
+        const out = [];
+        j.results.forEach(r => {
+            if (!r.text || r.text.length > 140 || !hasWord(r.text, word)) return;
+            const tr = [].concat(...(r.translations || [])).find(t => t && t.lang === 'cmn' && t.text);
+            if (tr) out.push({ en: r.text.trim(), zh: tr.text.trim() });
+        });
+        return { ok: true, list: out };
+    }
+    async function get(word, builtin) {
+        const key = word.toLowerCase();
+        if (cache[key] && cache[key].length) return cache[key];
+        const [d, t] = await Promise.all([fromDict(word), fromTatoeba(word)]);
+        const seen = new Set(); let list = [];
+        [...(builtin || []), ...t.list, ...d.list].forEach(x => { const k = x.en.toLowerCase(); if (!seen.has(k)) { seen.add(k); list.push(x); } });
+        list.sort((x, y) => (y.zh ? 1 : 0) - (x.zh ? 1 : 0));
+        list = list.slice(0, 4);
+        if (list.length) { cache[key] = list; save(); }
+        return list;
+    }
+    return { get };
+})();
+let _exToken = 0;
+function renderExamples(word) {
+    const box = $('wd-examples'); if (!box) return;
+    const my = ++_exToken;
+    const v = vocabLookup(word);
+    const builtin = v && v.ex ? [{ en: v.ex, zh: v.exZh || '' }] : [];
+    const re = new RegExp('(\\b' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\w*)', 'gi');
+    const show = list => {
+        box.innerHTML = list.length
+            ? list.map(x => `<div class="ex-row"><div class="ex-en">${esc(x.en).replace(re, '<b>$1</b>')}</div>${x.zh ? `<div class="ex-zh">${esc(x.zh)}</div>` : ''}</div>`).join('')
+            : '<div class="ex-empty">查不到這個字的例句（可能是離線或字典沒收錄），可以用下方的劍橋辭典查詢。</div>';
+    };
+    if (builtin.length) show(builtin); else box.innerHTML = '<div class="ex-empty">例句載入中…</div>';
+    Examples.get(word, builtin).then(list => { if (my === _exToken) show(list); }).catch(() => { if (my === _exToken) show(builtin); });
+}
+
 // ==================== 2. 我的錯題庫 (localStorage) ====================
 function loadBank() {
     try { const a = JSON.parse(localStorage.getItem('vocab_wrong_bank') || '[]'); return Array.isArray(a) ? a : []; }
@@ -532,8 +594,46 @@ function cancelAdd(word) {
 }
 function removeFromBank(word) { wrongBank = wrongBank.filter(w => w.word !== word); saveBank(); if (hasProfile()) Profile.bankRemoved(); }
 
-let bankFilter = 'all', bankSort = 'time', bankSearch = '';
+let bankFilter = 'all', bankSort = 'time', bankSearch = '', bankMode = 'mine', libShown = 80;
+// 單字庫搜尋（1~6 級全部單字，不限有沒有答錯過）
+function renderLibrary() {
+    const listEl = $('bank-list');
+    document.querySelectorAll('#bank-level-tabs .lb-tab').forEach(b => b.classList.toggle('active', b.dataset.level === bankFilter));
+    const q = bankSearch.trim().toLowerCase();
+    let items = getVocabByLevels(bankFilter === 'all' ? ALL_LEVELS : [bankFilter])
+        .filter(v => !q || String(v.word).toLowerCase().includes(q) || (v.meaning || '').includes(q));
+    const rank = v => { const w = String(v.word).toLowerCase(); return w === q ? 0 : w.startsWith(q) ? 1 : 2; };
+    items.sort((x, y) => (q ? rank(x) - rank(y) : 0) || String(x.word).localeCompare(String(y.word)));
+    $('bank-count').textContent = `單字庫共 ${items.length} 個單字${q ? '符合' : ''}`;
+    if (!items.length) { listEl.innerHTML = '<div class="bank-empty">找不到符合的單字</div>'; return; }
+    const shown = items.slice(0, libShown);
+    let html = '';
+    shown.forEach(v => {
+        const inBank = isInBank(v.word);
+        html += `<div class="bank-row is-lib">
+            <div class="bank-info" data-word="${esc(v.word)}" title="點擊查看單字詳情"><div class="bank-word">${esc(v.word)}<span class="lv-badge">${esc(LEVEL_LABEL[v.level] || '')}</span>
+            ${(() => { const p = posOf(v); return `<span class="pos-badge" data-posw="${esc(v.word)}">${esc(p)}</span>`; })()}
+            </div><div class="bank-meaning">${esc(v.meaning)}</div></div>
+            <button class="bank-remove lib-add ${inBank ? 'lib-added' : ''}" data-word="${esc(v.word)}" ${inBank ? 'disabled' : ''}>${inBank ? '✓ 已在錯題庫' : '＋ 加入'}</button></div>`;
+    });
+    if (items.length > shown.length) html += `<button class="btn btn-secondary lib-more" id="lib-more">顯示更多（還有 ${items.length - shown.length} 個）</button>`;
+    listEl.innerHTML = html;
+    const missing = shown.filter(v => !posOf(v)).slice(0, 40).map(v => v.word);
+    if (missing.length) WordInfo.fillPos(missing, (word, p) => {
+        listEl.querySelectorAll('[data-posw]').forEach(el => { if (el.dataset.posw === word) el.textContent = p; });
+    });
+}
+function syncBankMode() {
+    const lib = bankMode === 'lib';
+    document.querySelectorAll('#bank-mode-tabs .lb-tab').forEach(b => b.classList.toggle('active', b.dataset.mode === bankMode));
+    $('bank-sort').style.display = lib ? 'none' : '';
+    $('bank-search').placeholder = lib ? '🔍 搜尋 1~6 級所有單字或中文...' : '🔍 搜尋單字或中文...';
+    $('btn-bank-practice').style.display = lib ? 'none' : '';
+    $('btn-bank-clear').style.display = lib ? 'none' : '';
+}
 function renderBank() {
+    syncBankMode();
+    if (bankMode === 'lib') { renderLibrary(); return; }
     const listEl = $('bank-list');
     $('bank-count').textContent = `共 ${wrongBank.length} 個單字`;
     document.querySelectorAll('#bank-level-tabs .lb-tab').forEach(b => b.classList.toggle('active', b.dataset.level === bankFilter));
@@ -590,12 +690,22 @@ $('bank-list').addEventListener('click', e => {
         return;
     }
 
+    if (e.target.closest('#lib-more')) { playClickSound(); libShown += 80; renderBank(); return; }
+    const add = e.target.closest('.lib-add');
+    if (add) {
+        if (add.disabled) return;
+        const v = vocabLookup(add.dataset.word); if (!v) return;
+        if (addToBank({ word: v.word, correctMeaning: v.meaning, level: v.level })) playCorrectSound();
+        renderBank();
+        return;
+    }
     const b = e.target.closest('.bank-remove');
     if (!b) return;
     playClickSound();
     removeFromBank(b.dataset.word);
     renderBank();
 });
+document.querySelectorAll('#bank-mode-tabs .lb-tab').forEach(b => b.onclick = () => { playClickSound(); bankMode = b.dataset.mode; libShown = 80; renderBank(); });
 
 // ==================== 2-1. 單字詳情 / 記憶曲線 ====================
 // 記憶模型（艾賓浩斯式估算）：保留率 R = e^(-經過時間 / 穩定度 S)
@@ -684,15 +794,30 @@ function memoryChart(w) {
 
 let currentDetailWord = null;
 function openWordDetail(word) {
-    const w = wrongBank.find(x => x.word === word);
-    if (!w) return;
+    if (!wrongBank.find(x => x.word === word) && !vocabLookup(word)) return;
     currentDetailWord = word;
     renderWordDetail();
     showScreen('word');
 }
 function renderWordDetail() {
-    const w = wrongBank.find(x => x.word === currentDetailWord);
-    if (!w) { showScreen('bank'); renderBank(); return; }
+    let w = wrongBank.find(x => x.word === currentDetailWord);
+    const inBank = !!w;
+    if (!w) {
+        const v = vocabLookup(currentDetailWord);
+        if (!v) { showScreen('bank'); renderBank(); return; }
+        w = { word: v.word, meaning: v.meaning, level: v.level, pos: v.pos || '' };
+    }
+    $('wd-memory-block').style.display = inBank ? '' : 'none';
+    $('btn-word-known').classList.toggle('hidden', !inBank);
+    $('btn-word-add').classList.toggle('hidden', inBank);
+    renderExamples(w.word);
+    $('wd-word').textContent = w.word;
+    $('wd-meaning').textContent = w.meaning || '';
+    $('wd-level').textContent = LEVEL_LABEL[w.level] || '';
+    $('wd-pos').textContent = posOf(w);
+    $('wd-google').href = 'https://www.google.com/search?q=' + encodeURIComponent(w.word + ' 意思');
+    $('wd-cambridge').href = 'https://dictionary.cambridge.org/search/english-chinese-traditional/direct/?q=' + encodeURIComponent(w.word);
+    if (!inBank) return;
     const now = Date.now(), m = memoryModel(w, now);
     const okN = m.events.filter(r => r.ok).length, badN = m.events.length - okN;
     const ret = Math.round(m.retNow * 100);
@@ -728,6 +853,12 @@ const closeWordDetail = () => { playClickSound(); currentDetailWord = null; show
 $('btn-word-back').onclick = closeWordDetail;
 $('btn-word-back-top').onclick = closeWordDetail;
 $('btn-word-speak').onclick = () => { playClickSound(); if (currentDetailWord) speakWord(currentDetailWord); };
+$('btn-word-add').onclick = () => {
+    if (!currentDetailWord) return;
+    const v = vocabLookup(currentDetailWord); if (!v) return;
+    if (addToBank({ word: v.word, correctMeaning: v.meaning, level: v.level })) playCorrectSound();
+    renderWordDetail();
+};
 $('btn-word-known').onclick = () => {
     if (!currentDetailWord) return;
     if (!confirm(`確定要把「${currentDetailWord}」移出錯題庫嗎？`)) return;
@@ -1390,7 +1521,7 @@ $('btn-back-from-multi').onclick = () => {
     showMenu('survival');
     if(globalLeaderboardCard) globalLeaderboardCard.style.display = 'none';
 };
-$('btn-goto-bank').onclick = () => { playClickSound(); showScreen('bank'); renderBank(); };
+$('btn-goto-bank').onclick = () => { playClickSound(); bankMode = 'mine'; showScreen('bank'); renderBank(); };
 $('btn-start-ranked').onclick = () => { playClickSound(); currentMode = 'ranked'; practiceOrigin = ''; launchSingleGame(); };
 $('btn-start-practice').onclick = () => {
     playClickSound();
