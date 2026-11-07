@@ -45,6 +45,85 @@
         .bank-row.is-lib .bank-remove.lib-added { background: transparent; color: var(--muted, #888); border: 1px solid var(--muted, #888); opacity: .8; }
         .lib-more { width: 100%; margin: 10px 0; }
     </style>
+    <style id="home-essay-style">
+        /* ===== 主頁：簡潔版 ===== */
+        #lobby-screen h1 { margin-bottom: 2px; }
+        #lobby-screen .home-sub { text-align: center; font-size: 12px; color: var(--muted, #94a3b8); margin: 0 0 14px; }
+        .home-menu { display: flex; flex-direction: column; gap: 10px; }
+        .home-card { display: flex; align-items: center; gap: 14px; width: 100%; box-sizing: border-box; padding: 13px 16px; border-radius: 16px; border: 1px solid #e2e8f0; background: #fff; color: #0f172a; text-align: left; cursor: pointer; font-family: inherit; box-shadow: 0 1px 3px rgba(15, 23, 42, .06); transition: transform .1s; }
+        .home-card:active { transform: scale(.98); }
+        .hc-ico { flex: none; width: 46px; height: 46px; display: grid; place-items: center; font-size: 24px; border-radius: 13px; background: var(--hc, #dbeafe); }
+        .hc-txt b { display: block; font-size: 17px; }
+        .hc-txt small { display: block; font-size: 12px; color: #64748b; margin-top: 2px; }
+        .hc-survival { --hc: #dbeafe; } .hc-mj { --hc: #e0f2fe; } .hc-essay { --hc: #dcfce7; } .hc-bank { --hc: #fef3c7; }
+        body.dark-mode .home-card { background: #1e293b; border-color: #334155; color: #e2e8f0; box-shadow: none; }
+        body.dark-mode .hc-txt small { color: #94a3b8; }
+        body.dark-mode .hc-ico { background: #0f172a; }
+        .home-more { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 2px; }
+        .hm-btn { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 9px 2px; border-radius: 12px; border: 1px solid #e2e8f0; background: transparent; color: #475569; font-size: 12px; cursor: pointer; font-family: inherit; }
+        .hm-btn > span:first-child { font-size: 20px; line-height: 1; }
+        body.dark-mode .hm-btn { border-color: #334155; color: #94a3b8; }
+        /* 排行榜預設收合 */
+        #global-leaderboard-card .lb-head { cursor: pointer; }
+        .lb-chev { display: inline-block; margin-left: 4px; transition: transform .2s; font-size: 12px; color: var(--muted, #94a3b8); }
+        #global-leaderboard-card.lb-collapsed .lb-tabs, #global-leaderboard-card.lb-collapsed .lb-list, #global-leaderboard-card.lb-collapsed .best-text { display: none; }
+        #global-leaderboard-card.lb-collapsed .lb-chev { transform: rotate(-90deg); }
+        .home-foot { text-align: center; font-size: 11px; line-height: 1.7; color: var(--muted, #94a3b8); margin-top: 14px; }
+        /* ===== 作文訓練 ===== */
+        #essay-screen .es-view.hidden { display: none; }
+        .es-sec { font-size: 13px; font-weight: 700; color: #64748b; margin: 14px 0 6px; text-align: left; }
+        .es-row { display: flex; flex-wrap: wrap; gap: 6px; }
+        .es-chip { padding: 7px 13px; border-radius: 999px; border: 1px solid #cbd5e1; background: transparent; color: inherit; font-size: 14px; cursor: pointer; font-family: inherit; }
+        .es-chip.on { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+        .es-topic { text-align: left; padding: 10px 12px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 8px; cursor: pointer; }
+        .es-topic.on { border-color: #3b82f6; background: rgba(59, 130, 246, .1); }
+        .es-topic b { font-size: 15px; } .es-tag { font-size: 11px; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: rgba(100, 116, 139, .18); }
+        .es-zh { font-size: 13px; color: #64748b; margin-top: 3px; line-height: 1.45; }
+        .es-custom { width: 100%; box-sizing: border-box; padding: 10px; border-radius: 10px; border: 1px solid #cbd5e1; font-size: 16px; font-family: inherit; background: transparent; color: inherit; }
+        .es-prompt { text-align: left; padding: 10px 12px; border-radius: 12px; background: rgba(59, 130, 246, .1); margin-bottom: 8px; }
+        .es-prompt b { display: block; font-size: 16px; margin-bottom: 3px; } .es-prompt div { font-size: 14px; line-height: 1.5; }
+        .es-bar-top { display: flex; justify-content: space-between; align-items: center; margin: 6px 0; font-size: 14px; }
+        .es-count { font-weight: 700; color: #64748b; } .es-count.near { color: #d97706; } .es-count.ok { color: #16a34a; }
+        .es-red { color: #dc2626; font-weight: 700; }
+        #es-text { width: 100%; box-sizing: border-box; min-height: 280px; padding: 12px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 16px; line-height: 1.6; font-family: Georgia, 'Times New Roman', serif; resize: vertical; background: transparent; color: inherit; }
+        .es-hints { text-align: left; padding: 8px 10px; border-radius: 10px; background: rgba(245, 158, 11, .12); margin: 6px 0; font-size: 13px; }
+        .es-hints.hidden { display: none; }
+        .es-kw { display: inline-block; margin: 3px 4px 0 0; padding: 2px 9px; border-radius: 999px; background: rgba(100, 116, 139, .16); font-size: 13px; }
+        .es-kw small { color: #64748b; }
+        .es-lookup { display: flex; gap: 6px; margin: 8px 0 2px; }
+        .es-lookup input { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 10px; border: 1px solid #cbd5e1; font-size: 16px; background: transparent; color: inherit; font-family: inherit; }
+        #es-lookup-out { font-size: 13px; text-align: left; color: #64748b; min-height: 18px; }
+        #es-msg { color: #dc2626; font-size: 13px; min-height: 16px; }
+        .es-title { font-size: 18px; font-weight: 700; text-align: left; }
+        .es-note { text-align: left; font-size: 14px; margin: 4px 0; }
+        .es-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0; }
+        .es-card { padding: 10px 4px; border-radius: 12px; background: rgba(100, 116, 139, .12); } .es-card b { display: block; font-size: 20px; } .es-card span { font-size: 12px; color: #64748b; }
+        .es-h { text-align: left; font-size: 15px; margin: 16px 0 6px; }
+        .es-lvrow { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 3px 0; } .es-lvrow span { width: 28px; text-align: left; } .es-lvrow em { width: 26px; font-style: normal; text-align: right; }
+        .es-bar { flex: 1; height: 8px; border-radius: 4px; background: rgba(100, 116, 139, .18); overflow: hidden; } .es-bar i { display: block; height: 100%; background: #3b82f6; }
+        .es-chips { text-align: left; margin-top: 6px; } .es-hint { text-align: left; font-size: 13px; color: #64748b; margin: 4px 0; }
+        .es-trans { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; } .es-trans div { text-align: left; font-size: 13px; padding: 6px 8px; border-radius: 8px; } .es-trans small { display: block; font-size: 11px; color: #64748b; }
+        .es-trans .ok { background: rgba(34, 197, 94, .14); } .es-trans .no { background: rgba(239, 68, 68, .1); }
+        .es-issue { text-align: left; padding: 8px 10px; border-radius: 10px; background: rgba(239, 68, 68, .08); margin-bottom: 6px; font-size: 14px; }
+        .es-issue code { display: block; font-size: 12px; color: #64748b; margin-top: 2px; white-space: pre-wrap; }
+        .es-up { text-align: left; font-size: 14px; margin: 4px 0; }
+        .es-text-view { text-align: left; white-space: pre-wrap; line-height: 1.6; padding: 12px; border-radius: 12px; background: rgba(100, 116, 139, .1); font-family: Georgia, serif; font-size: 15px; }
+        .es-hrow { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 8px; }
+        .es-hinfo { flex: 1; text-align: left; cursor: pointer; } .es-hinfo small { display: block; color: #64748b; }
+        .es-del { border: none; background: transparent; font-size: 18px; cursor: pointer; }
+        body.dark-mode .es-topic, body.dark-mode .es-hrow { border-color: #334155; }
+        body.dark-mode .es-chip, body.dark-mode .es-custom, body.dark-mode #es-text, body.dark-mode .es-lookup input { border-color: #475569; }
+        .ai-box { text-align: left; padding: 12px; border-radius: 14px; border: 1px solid #86efac; background: rgba(34, 197, 94, .08); margin: 10px 0; }
+        .ai-box h3 { margin: 12px 0 4px; font-size: 15px; } .ai-box h3:first-child { margin-top: 0; }
+        .ai-total { font-size: 28px; font-weight: 800; } .ai-total small { font-size: 14px; color: #64748b; font-weight: 400; }
+        .ai-scores { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 8px 0; }
+        .ai-scores div { text-align: center; padding: 8px 2px; border-radius: 10px; background: rgba(100, 116, 139, .12); font-size: 12px; color: #64748b; } .ai-scores b { display: block; font-size: 18px; color: inherit; }
+        .ai-box ul { margin: 4px 0; padding-left: 18px; font-size: 14px; line-height: 1.5; }
+        .ai-fix { padding: 8px 10px; border-radius: 10px; background: rgba(100, 116, 139, .1); margin-bottom: 6px; font-size: 14px; }
+        .ai-fix s { color: #dc2626; } .ai-fix b { color: #16a34a; } .ai-fix small { display: block; color: #64748b; margin-top: 2px; }
+        .ai-model { white-space: pre-wrap; font-family: Georgia, serif; font-size: 14px; line-height: 1.6; }
+        .ai-err { color: #dc2626; font-size: 14px; text-align: left; }
+    </style>
 </head>
 
 <body>
@@ -62,7 +141,7 @@
 
 
             <h1>英語單字King</h1>
-            <p class="subtitle">記得使用瀏覽器開啟才會有紀錄喔！<br>也可將此網頁新增至主螢幕</p>
+            <p class="home-sub">用瀏覽器開啟才會儲存紀錄 · 可加入主畫面</p>
 
             <!-- 個人檔案小卡 -->
             <div id="profile-chip" class="profile-chip" title="開啟個人檔案">
@@ -75,25 +154,24 @@
             </div>
 
             <!-- 主選單 -->
-            <div id="main-menu-options" class="menu-col">
-                <button id="btn-goto-survival" class="btn btn-primary">⚔️ 生存模式</button>
+            <div id="main-menu-options" class="menu-col home-menu">
+                <button id="btn-goto-survival" class="home-card hc-survival"><span class="hc-ico">⚔️</span><span class="hc-txt"><b>生存模式</b><small>限時答題・單人 / 多人</small></span></button>
                 <button id="btn-goto-single" style="display:none" aria-hidden="true"></button><button id="btn-goto-multi" style="display:none" aria-hidden="true"></button>
-                <button id="btn-goto-mj" class="btn btn-sky">🀄 英文麻將</button>
-                <button id="btn-goto-eco" class="btn btn-secondary">🛒 商店・股票</button>
-                <button id="btn-goto-world" class="btn btn-secondary">🗺️ 世界地圖</button>
-                <button id="btn-goto-friends" class="btn btn-secondary" style="position: relative;">
-                    👥 我的好友 <span id="friends-badge" class="help-red-dot online-dot hidden">0</span>
-                </button>
-                <button id="btn-goto-bank" class="btn btn-secondary">📚 我的錯題庫</button>
-                <button id="btn-help" class="btn btn-secondary" style="position: relative;">
-                    ❓ 使用說明 <span id="help-badge" class="help-red-dot hidden">NEW</span>
-                </button>
+                <button id="btn-goto-mj" class="home-card hc-mj"><span class="hc-ico">🀄</span><span class="hc-txt"><b>英文麻將</b><small>拼單字胡牌</small></span></button>
+
+                <button id="btn-goto-bank" class="home-card hc-bank"><span class="hc-ico">📚</span><span class="hc-txt"><b>我的錯題庫</b><small>複習錯字・搜尋單字庫</small></span></button>
+                <div class="home-more">
+                    <button id="btn-goto-eco" class="hm-btn"><span>🛒</span>商店</button>
+                    <button id="btn-goto-world" class="hm-btn"><span>🗺️</span>世界地圖</button>
+                    <button id="btn-goto-friends" class="hm-btn"><span>👥</span>好友 <span id="friends-badge" class="help-red-dot online-dot hidden">0</span></button>
+                    <button id="btn-help" class="hm-btn"><span>❓</span>說明 <span id="help-badge" class="help-red-dot hidden">NEW</span></button>
+                </div>
             </div>
 
             <!-- 🏆 全伺服器排行榜 -->
-            <div id="global-leaderboard-card" class="lb-card">
+            <div id="global-leaderboard-card" class="lb-card lb-collapsed">
                 <div class="lb-head">
-                    <span class="lb-title">🏆 全伺服器排行榜 <button id="btn-lb-refresh" class="lb-refresh" title="重新載入排行榜"
+                    <span class="lb-title">🏆 排行榜 <span class="lb-chev" id="lb-chev">▾</span> <button id="btn-lb-refresh" class="lb-refresh" title="重新載入排行榜"
                             aria-label="重新載入排行榜">🔄</button></span>
                     <span id="best-record-text" class="best-text">我的最高紀錄：0 秒</span>
                 </div>
@@ -160,25 +238,63 @@
                 <button id="btn-back-from-multi" class="btn btn-secondary" style="margin-top: 10px;">
                     返回主選單</button>
             </div>
-            <div id="lobby-footer">
-                <div style="text-align: center; margin-top: 8px;">
-                    <button id="btn-about" class="btn-link">關於我們與隱私權說明</button>
-                </div>
-                <div
-                    style="text-align: center; font-size: 12px; color: var(--muted); margin-top: 10px; margin-bottom: 5px;">
-                    © 2026 Vocab Battle Studio. All rights reserved.
-                </div>
-                <div style="text-align: center; font-size: 11px; color: var(--muted); margin-top: 4px;">
-                    單字庫資料來源：財團法人大學入學考試中心基金會
-                </div>
-                <div style="text-align: center; font-size: 11px; color: var(--muted); margin-top: 4px;">
-                    版權屬原著作者與財團法人大學入學考試中心基金會所有。
-                </div>
-                <div style="text-align: center; font-size: 11px; color: var(--muted); margin-top: 4px;">
-                    背景音樂來源:Chillpeach
-                </div>
+            <div id="lobby-footer" class="home-foot">
+                <button id="btn-about" class="btn-link">關於我們與隱私權說明</button><br>
+                © 2026 Vocab Battle Studio. All rights reserved.<br>
+                單字庫資料來源：財團法人大學入學考試中心基金會，版權屬原著作者與該基金會所有。<br>
+                背景音樂來源:Chillpeach
+            </div>
+        </div>
 
+        <!-- ==================== ✍️ 英文作文訓練 ==================== -->
+        <div id="essay-screen" class="screen hidden">
+            <h1>✍️ 英文作文訓練</h1>
 
+            <div id="es-setup" class="es-view">
+                <div id="es-resume"></div>
+                <div class="es-sec">題型</div><div class="es-row" id="es-types"></div>
+                <div class="es-sec">選一個題目（不選就隨機抽）</div><div id="es-topics"></div>
+                <div class="es-sec">或自己輸入題目</div>
+                <input id="es-custom" class="es-custom" type="text" placeholder="例如：Describe your favorite season.">
+                <div class="es-sec">目標字數</div><div class="es-row" id="es-targets"></div>
+                <div class="es-sec">限時</div><div class="es-row" id="es-times"></div>
+                <div class="menu-col" style="margin-top:16px;">
+                    <button id="es-start" class="btn btn-primary">開始寫作</button>
+                    <button id="es-hist-btn" class="btn btn-secondary">🗂 作文紀錄</button>
+                    <button id="es-home" class="btn btn-secondary">返回主選單</button>
+                </div>
+            </div>
+
+            <div id="es-write" class="es-view hidden">
+                <div class="es-prompt"><b id="es-ptitle"></b><div id="es-pzh"></div></div>
+                <div class="es-bar-top"><span id="es-timer"></span><span id="es-count" class="es-count">0 字</span><button id="es-hint-btn" class="es-chip">💡 提示字</button></div>
+                <div id="es-hints" class="es-hints hidden"></div>
+                <textarea id="es-text" placeholder="Start writing here..." spellcheck="true" autocapitalize="sentences"></textarea>
+                <div class="es-lookup"><input id="es-lookup-in" type="text" placeholder="🔍 查單字（英文）" autocapitalize="none" autocomplete="off"><button id="es-lookup-btn" class="es-chip">查</button></div>
+                <div id="es-lookup-out"></div>
+                <div id="es-msg"></div>
+                <div class="menu-col" style="margin-top:8px;">
+                    <button id="es-submit" class="btn btn-primary">完成並檢查</button>
+                    <button id="es-write-back" class="btn btn-secondary">回到題目選擇（草稿會保留）</button>
+                </div>
+            </div>
+
+            <div id="es-result" class="es-view hidden">
+                <h2 id="es-result-title" style="margin:0 0 6px;"></h2>
+                <div id="es-ai"></div>
+                <div id="es-result-body"></div>
+                <p class="es-hint">這是規則式自我檢查，不是 AI 批改，文法判斷可能有誤。</p>
+                <div class="menu-col" style="margin-top:10px;">
+                    <button id="es-ai-btn" class="btn btn-primary">🤖 AI 批改</button>
+                    <button id="es-copy" class="btn btn-sky">📋 複製作文</button>
+                    <button id="es-result-back" class="btn btn-secondary">返回</button>
+                </div>
+            </div>
+
+            <div id="es-history" class="es-view hidden">
+                <h2 style="margin:0 0 8px;">🗂 作文紀錄</h2>
+                <div id="es-hist-list"></div>
+                <button id="es-hist-back" class="btn btn-secondary" style="margin-top:10px;">返回</button>
             </div>
         </div>
 
@@ -631,10 +747,25 @@
     <script src="civic.js?v=7"></script>
     <script src="trade.js?v=13"></script>
     <script src="world.js?v=15"></script>
-    <script src="app.js?v=19"></script>
+    <script src="app.js?v=20"></script>
     <script src="pwa.js?v=1"></script>
     <script src="profile.js?v=7"></script>
     <script src="friends.js?v=4"></script>
+    <script src="essay.js?v=2"></script>
+    <script>
+        // 主頁排行榜：預設收合，點標題列展開/收合
+        (function () {
+            var c = document.getElementById('global-leaderboard-card'); if (!c) return;
+            var open = false; try { open = localStorage.getItem('lb_open') === '1'; } catch (e) { }
+            c.classList.toggle('lb-collapsed', !open);
+            var hd = c.querySelector('.lb-head');
+            if (hd) hd.addEventListener('click', function (e) {
+                if (e.target.closest('#btn-lb-refresh')) return;
+                var col = c.classList.toggle('lb-collapsed');
+                try { localStorage.setItem('lb_open', col ? '0' : '1'); } catch (er) { }
+            });
+        })();
+    </script>
     <script src="mahjong_words.js?v=1"></script>
     <script src="mahjong.js?v=17"></script>
 </body>
